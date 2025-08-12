@@ -3,4 +3,6 @@ uvicorn
 pymongo
 pydantic
 bcrypt
+jinja2
+httpx
 pydantic[email]

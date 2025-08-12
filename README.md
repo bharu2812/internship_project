@@ -30,7 +30,10 @@ internship_project/
 2. **(Optional) Create a virtual environment:**
    ```bash
    python3 -m venv internship_proj_venv
+   # For Linux/Mac:
    source internship_proj_venv/bin/activate
+   # For Windows (cmd):
+   internship_proj_venv\Scripts\activate.bat
    ```
 
 3. **Install dependencies:**
