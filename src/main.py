@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Form, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+import os
 from fastapi.security import HTTPBasicCredentials
 from routes.hod import router as hod_router, PORTAL_USERNAME, PORTAL_HASHED_PASSWORD, authenticate
 import bcrypt
@@ -15,7 +16,47 @@ from routes.hod import router as hod_router
 
 
 app = FastAPI()
-templates = Jinja2Templates(directory="src/templates")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+# In-memory HOD user store for demo (replace with DB in production)
+HOD_USERS = {}
+# Password Setup Page (GET)
+@app.get("/setup-password", response_class=HTMLResponse)
+async def setup_password_form(request: Request, email: str = ""):
+    username = email.split("@")[0] if email else ""
+    return templates.TemplateResponse("setup_password.html", {"request": request, "username": username})
+
+
+# Password Setup Page (POST)
+@app.post("/setup-password", response_class=HTMLResponse)
+async def setup_password_submit(request: Request, username: str = Form(...), password: str = Form(...), confirm_password: str = Form(...)):
+    if password != confirm_password:
+        return templates.TemplateResponse("setup_password.html", {"request": request, "username": username, "error": "Passwords do not match."})
+    hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+
+    # Store username and hashed password in MongoDB securely
+    from db.mongodb import get_db
+    hod_collection = get_db()
+    # Update HOD record with password (find by username)
+    result = hod_collection.update_one(
+        {"email": {"$regex": f"^{username}@"}},
+        {"$set": {"password": hashed_pw.decode("utf-8")}},
+        upsert=False
+    )
+
+    # Show confirmation and login URL at the bottom of the same page
+    login_url = "http://127.0.0.1:8000/"
+    return templates.TemplateResponse(
+        "setup_password.html",
+        {
+            "request": request,
+            "username": username,
+            "success": True,
+            "login_url": login_url
+        }
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,20 +74,34 @@ app.include_router(hod_router)
 async def show_login(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
-# Handle login form POST
+# Handle login form POST (for both Portal Owner and HOD)
 @app.post("/login", response_class=HTMLResponse)
 async def login(request: Request, username: str = Form(...), password: str = Form(...)):
-    correct_username = username == PORTAL_USERNAME
-    correct_password = bcrypt.checkpw(password.encode(), PORTAL_HASHED_PASSWORD)
-    if correct_username and correct_password:
+    # Portal Owner login
+    if username == PORTAL_USERNAME and bcrypt.checkpw(password.encode(), PORTAL_HASHED_PASSWORD):
         return RedirectResponse(url="/create-hod-form", status_code=303)
+
+    # HOD login (validate from MongoDB)
+    from db.mongodb import get_db
+    hod_collection = get_db()
+    # Find HOD by username (email prefix)
+    hod_user = hod_collection.find_one({"email": {"$regex": f"^{username}@"}})
+    if hod_user and "password" in hod_user:
+        db_hashed_pw = hod_user["password"].encode("utf-8")
+        if bcrypt.checkpw(password.encode(), db_hashed_pw):
+            return RedirectResponse(url="/main", status_code=303)
+
     return templates.TemplateResponse(
         "login.html",
         {
             "request": request,
-            "error": "<span style='color:#c0392b;font-weight:bold;'>Login failed: Invalid Portal Owner credentials.</span>"
+            "error": "<span style='color:#c0392b;font-weight:bold;'>Login failed: Invalid credentials.</span>"
         }
     )
+# Main Portal for HOD
+@app.get("/main", response_class=HTMLResponse)
+async def show_main_portal(request: Request):
+    return templates.TemplateResponse("main.html", {"request": request})
 
 # Show create HOD form after login
 @app.get("/create-hod-form", response_class=HTMLResponse)
