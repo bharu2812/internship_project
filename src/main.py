@@ -4,6 +4,7 @@ from fastapi.templating import Jinja2Templates
 import os
 from fastapi.security import HTTPBasicCredentials
 from routes.hod import router as hod_router, PORTAL_USERNAME, PORTAL_HASHED_PASSWORD, authenticate
+from routes.registration import router as registration_router
 import bcrypt
 import uvicorn
 import httpx
@@ -20,8 +21,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+
 # In-memory HOD user store for demo (replace with DB in production)
 HOD_USERS = {}
+
+# Registration Page (GET)
+@app.get("/register", response_class=HTMLResponse)
+async def show_registration_form(request: Request):
+    return templates.TemplateResponse("registration.html", {"request": request})
+
 # Password Setup Page (GET)
 @app.get("/setup-password", response_class=HTMLResponse)
 async def setup_password_form(request: Request, email: str = ""):
@@ -68,6 +76,7 @@ app.add_middleware(
 
 
 app.include_router(hod_router)
+app.include_router(registration_router)
 
 # Show login page on root
 @app.get("/", response_class=HTMLResponse)
