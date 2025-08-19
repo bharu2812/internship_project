@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Candidate Management</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6fa; }
+        .header-gradient {
+            width: 100%;
+            /* background: linear-gradient(90deg, #e53935 0%, #e35d5b 100%); */
+            padding: 32px 0 16px 0;
+            text-align: center;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            background: #fff;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+        }
+        h2 {
+            text-align: left;
+            color: #2d3e50;
+            margin-bottom: 8px;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .candidate-count {
+            color: #e53935;
+            font-weight: 600;
+            margin-left: 12px;
+            font-size: 1.1rem;
+        }
+        .search-bar {
+            margin-bottom: 18px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .search-bar input {
+            padding: 8px 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1rem;
+            width: 260px;
+        }
+        .action-icons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 18px;
+            margin-bottom: 12px;
+        }
+        .action-icons button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s;
+            position: relative;
+        }
+        .action-icons button:hover {
+            transform: scale(1.15);
+        }
+        .action-icons button span {
+            font-size: 28px;
+            color: #e53935;
+        }
+        .action-icons button[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            top: 36px;
+            right: 0;
+            background: #fff;
+            color: #e53935;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 4px 12px;
+            font-size: 0.95rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            z-index: 10;
+        }
+        .table-wrapper { position: relative; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
+        }
+        th, td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        th {
+            background: #f4f6fa;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        tr:hover td {
+            background: #ffeaea;
+        }
+        .dialog {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        .dialog.show { display: flex; }
+        .dialog-content {
+            background: #fff;
+            padding: 32px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            min-width: 350px;
+        }
+        .dialog-content label { display: block; margin-top: 12px; }
+        .dialog-content input { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; }
+        .dialog-content .actions { margin-top: 24px; text-align: right; }
+        .dialog-content button { padding: 8px 20px; margin-left: 8px; }
+    </style>
+</head>
+<body>
+    <div class="header-gradient">
+        <a href="https://www.lenovo.com/in/en/?Redirect=False" target="_blank">
+            <img src="https://logos-world.net/wp-content/uploads/2022/07/Lenovo-Logo.png" alt="Lenovo Logo" style="height:100px;">
+        </a>
+    </div>
+    <div class="container">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <h2>Candidate Management <span class="candidate-count" id="candidateCount">(0)</span></h2>
+            <div class="action-icons">
+                <button title="Import CSV" onclick="importCSV()"><span>&#128190;</span></button>
+                <button title="Export CSV" onclick="exportCSV()"><span>&#128462;</span></button>
+                <button title="Add Record" onclick="showAddDialog()"><span>&#10133;</span></button>
+            </div>
+        </div>
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Search candidates..." oninput="filterCandidates()">
+        </div>
+        <div class="table-wrapper">
+            <table id="candidateTable">
+                <thead>
+                    <tr>
+                        <th>Registration No</th>
+                        <th>Email ID</th>
+                        <th>Name</th>
+                        <th>Branch</th>
+                        <th>Semester</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Candidate rows will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="dialog" id="addDialog">
+        <div class="dialog-content">
+            <h3>Add Candidate Record</h3>
+            <form id="addForm">
+                <label for="regNo">Registration No</label>
+                <input type="text" id="regNo" name="regNo" required>
+                <label for="email">Email ID</label>
+                <input type="email" id="email" name="email" required>
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" required>
+                <label for="branch">Branch</label>
+                <input type="text" id="branch" name="branch" required>
+                <label for="semester">Semester</label>
+                <input type="text" id="semester" name="semester" required>
+                <div class="actions">
+                    <button type="button" onclick="closeAddDialog()">Cancel</button>
+                    <button type="submit">Add</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <input type="file" id="csvInput" accept=".csv" style="display:none" />
+    <script>
+
+        // Add dialog logic
+        function showAddDialog() {
+            document.getElementById('addDialog').classList.add('show');
+        }
+        function closeAddDialog() {
+            document.getElementById('addDialog').classList.remove('show');
+        }
+        document.getElementById('addForm').onsubmit = function(e) {
+            e.preventDefault();
+            const regNo = this.regNo.value.trim();
+            const email = this.email.value.trim();
+            const name = this.name.value.trim();
+            const branch = this.branch.value.trim();
+            const semester = this.semester.value.trim();
+            addCandidateRow(regNo, email, name, branch, semester);
+            closeAddDialog();
+            this.reset();
+        };
+
+        // Table row logic
+        function addCandidateRow(regNo, email, name, branch, semester) {
+            const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
+            const row = table.insertRow();
+            row.insertCell(0).innerText = regNo;
+            row.insertCell(1).innerText = email;
+            row.insertCell(2).innerText = name;
+            row.insertCell(3).innerText = branch;
+            row.insertCell(4).innerText = semester;
+            updateCandidateCount();
+        }
+
+        function updateCandidateCount() {
+            const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
+            document.getElementById('candidateCount').innerText = `(${table.rows.length})`;
+        }
+
+        function filterCandidates() {
+            const input = document.getElementById('searchInput').value.toLowerCase();
+            const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
+            for (let row of table.rows) {
+                let show = false;
+                for (let cell of row.cells) {
+                    if (cell.innerText.toLowerCase().includes(input)) {
+                        show = true;
+                        break;
+                    }
+                }
+                row.style.display = show ? '' : 'none';
+            }
+        }
+
+        // CSV import/export logic
+        function importCSV() {
+            document.getElementById('csvInput').click();
+        }
+        document.getElementById('csvInput').onchange = function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const lines = evt.target.result.split('\n');
+                // Validate headers
+                const expectedHeaders = ["Registration No", "Email ID", "Name", "Branch", "Semester"];
+                const actualHeaders = lines[0].split(',').map(h => h.trim());
+                const isValid = expectedHeaders.every((h, i) => actualHeaders[i] === h);
+                if (!isValid) {
+                    alert("CSV file is invalid. Please use a file with headers: " + expectedHeaders.join(", "));
+                    return;
+                }
+                // Skip the first line (headers)
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i];
+                    const [regNo, email, name, branch, semester] = line.split(',');
+                    if (regNo && email && name && branch && semester) {
+                        addCandidateRow(regNo, email, name, branch, semester);
+                    }
+                }
+                updateCandidateCount();
+            };
+            reader.readAsText(file);
+        };
+        function exportCSV() {
+            const table = document.getElementById('candidateTable');
+            let csv = '';
+            for (let row of table.rows) {
+                let rowData = [];
+                for (let cell of row.cells) {
+                    rowData.push(cell.innerText);
+                }
+                csv += rowData.join(',') + '\n';
+            }
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'candidates.csv';
+            link.click();
+        }
+        // Initial candidate count update
+        updateCandidateCount();
+    </script>
+</body>
+</html>
