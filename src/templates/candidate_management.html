@@ -1,18 +1,3 @@
-            <script>
-            // Reload candidates from backend and update table
-            async function reloadCandidates() {
-                const response = await fetch('/candidates/');
-                const data = await response.json();
-                const tableBody = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
-                tableBody.innerHTML = '';
-                if (Array.isArray(data.candidates)) {
-                    for (const candidate of data.candidates) {
-                        addCandidateRow(candidate.regNo, candidate.email, candidate.name, candidate.branch, candidate.semester);
-                    }
-                }
-                updateCandidateCount();
-            }
-            </script>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -146,78 +131,11 @@
     <div class="container">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
             <h2>Candidate Management <span class="candidate-count" id="candidateCount">(0)</span></h2>
-            <div class="action-icons kebab-menu-wrapper">
-                <button id="kebabMenuBtn" title="More options" type="button">
-                    <span class="kebab-icon">&#8942;</span>
-                </button>
-                <div id="kebabDropdown" class="kebab-dropdown">
-                    <div class="kebab-option" onclick="importCSV(); hideKebabMenu();">Import using CSV</div>
-                    <div class="kebab-option" onclick="exportCSV(); hideKebabMenu();">Export using CSV</div>
-                    <div class="kebab-option" onclick="showAddDialog(); hideKebabMenu();">Manual Entry</div>
-                </div>
+            <div class="action-icons">
+                <button title="Import CSV" onclick="importCSV()"><span>&#128190;</span></button>
+                <button title="Export CSV" onclick="exportCSV()"><span>&#128462;</span></button>
+                <button title="Add Record" onclick="showAddDialog()"><span>&#10133;</span></button>
             </div>
-    <style>
-        .kebab-menu-wrapper {
-            position: relative;
-            display: flex;
-            align-items: center;
-        }
-        .kebab-icon {
-            font-size: 32px;
-            color: #e53935;
-            cursor: pointer;
-        }
-        #kebabMenuBtn {
-            background: none;
-            border: none;
-            padding: 0 8px;
-            cursor: pointer;
-        }
-        .kebab-dropdown {
-            display: none;
-            position: absolute;
-            right: 0;
-            top: 36px;
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            min-width: 180px;
-            z-index: 100;
-            flex-direction: column;
-        }
-        .kebab-dropdown.show {
-            display: flex;
-        }
-        .kebab-option {
-            padding: 12px 20px;
-            cursor: pointer;
-            color: #2d3e50;
-            font-size: 1rem;
-            transition: background 0.2s;
-        }
-        .kebab-option:hover {
-            background: #ffeaea;
-            color: #e53935;
-        }
-    </style>
-    <script>
-        // Kebab menu logic
-        const kebabBtn = document.getElementById('kebabMenuBtn');
-        const kebabDropdown = document.getElementById('kebabDropdown');
-        kebabBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            kebabDropdown.classList.toggle('show');
-        });
-        function hideKebabMenu() {
-            kebabDropdown.classList.remove('show');
-        }
-        document.addEventListener('click', function(event) {
-            if (!kebabBtn.contains(event.target) && !kebabDropdown.contains(event.target)) {
-                hideKebabMenu();
-            }
-        });
-    </script>
         </div>
         <div class="search-bar">
             <input type="text" id="searchInput" placeholder="Search candidates..." oninput="filterCandidates()">
@@ -262,149 +180,158 @@
     </div>
     <input type="file" id="csvInput" accept=".csv" style="display:none" />
     <script>
-
-    // ...existing code...
-        function showAddDialog() {
-            document.getElementById('addDialog').classList.add('show');
-        }
-        function closeAddDialog() {
-            document.getElementById('addDialog').classList.remove('show');
-        }
-        document.getElementById('addForm').onsubmit = async function(e) {
-            e.preventDefault();
-            const regNo = this.regNo.value.trim();
-            const email = this.email.value.trim();
-            const name = this.name.value.trim();
-            const branch = this.branch.value.trim();
-            const semester = this.semester.value.trim();
-            // Check for duplicates before adding
-            const response = await fetch(`/check-candidate-duplicate?email=${encodeURIComponent(email)}&regNo=${encodeURIComponent(regNo)}`);
-            const data = await response.json();
-            if (data.duplicate) {
-                alert('Duplicate candidate found (email or registration number already exists).');
-                return;
+    // Reload candidates from backend and update table
+    async function reloadCandidates() {
+        const response = await fetch('/candidates/');
+        const data = await response.json();
+        const tableBody = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
+        tableBody.innerHTML = '';
+        if (Array.isArray(data.candidates)) {
+            for (const candidate of data.candidates) {
+                addCandidateRow(candidate.regNo, candidate.email, candidate.name, candidate.branch, candidate.semester);
             }
-            // Send candidate data to backend for saving
-            const saveResponse = await fetch('/add-candidate/', {
+        }
+        updateCandidateCount();
+    }
+
+    function showAddDialog() {
+        document.getElementById('addDialog').classList.add('show');
+    }
+    function closeAddDialog() {
+        document.getElementById('addDialog').classList.remove('show');
+    }
+    document.getElementById('addForm').onsubmit = async function(e) {
+        e.preventDefault();
+        const regNo = this.regNo.value.trim();
+        const email = this.email.value.trim();
+        const name = this.name.value.trim();
+        const branch = this.branch.value.trim();
+        const semester = this.semester.value.trim();
+        // Check for duplicates before adding
+        const response = await fetch(`/check-candidate-duplicate?email=${encodeURIComponent(email)}&regNo=${encodeURIComponent(regNo)}`);
+        const data = await response.json();
+        if (data.duplicate) {
+            alert('Duplicate candidate found (email or registration number already exists).');
+            return;
+        }
+        // Send candidate data to backend for saving
+        const saveResponse = await fetch('/add-candidate/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ regNo, email, name, branch, semester })
+        });
+        const saveData = await saveResponse.json();
+        if (saveData.success) {
+            // Trigger setup email for this candidate
+            await fetch('/send-setup-emails/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ regNo, email, name, branch, semester })
+                body: JSON.stringify({ emails: [email] })
             });
-            const saveData = await saveResponse.json();
-            if (saveData.success) {
-                // Trigger setup email for this candidate
-                await fetch('/send-setup-emails/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ emails: [email] })
-                });
-                // Reload candidates from backend to update table
-                await reloadCandidates();
-            } else {
-                alert('Failed to save candidate to database.');
-            }
-            closeAddDialog();
-            this.reset();
+            // Reload candidates from backend to update table
+            await reloadCandidates();
+        } else {
+            alert('Failed to save candidate to database.');
+        }
+        closeAddDialog();
+        this.reset();
+    };
     // Initial candidate list load from backend
     reloadCandidates();
-        };
 
-        // Table row logic
-        function addCandidateRow(regNo, email, name, branch, semester) {
-            const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
-            const row = table.insertRow();
-            row.insertCell(0).innerText = regNo;
-            row.insertCell(1).innerText = email;
-            row.insertCell(2).innerText = name;
-            row.insertCell(3).innerText = branch;
-            row.insertCell(4).innerText = semester;
+    function addCandidateRow(regNo, email, name, branch, semester) {
+        const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
+        const row = table.insertRow();
+        row.insertCell(0).innerText = regNo;
+        row.insertCell(1).innerText = email;
+        row.insertCell(2).innerText = name;
+        row.insertCell(3).innerText = branch;
+        row.insertCell(4).innerText = semester;
+        updateCandidateCount();
+    }
+
+    function updateCandidateCount() {
+        const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
+        document.getElementById('candidateCount').innerText = `(${table.rows.length})`;
+    }
+
+    function filterCandidates() {
+        const input = document.getElementById('searchInput').value.toLowerCase();
+        const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
+        for (let row of table.rows) {
+            let show = false;
+            for (let cell of row.cells) {
+                if (cell.innerText.toLowerCase().includes(input)) {
+                    show = true;
+                    break;
+                }
+            }
+            row.style.display = show ? '' : 'none';
+        }
+    }
+
+    function importCSV() {
+        document.getElementById('csvInput').click();
+    }
+    document.getElementById('csvInput').onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const lines = evt.target.result.split('\n').filter(line => line.trim() !== '');
+            // Validate headers
+            const expectedHeaders = ["Registration No", "Email ID", "Name", "Branch", "Semester"];
+            const actualHeaders = lines[0].split(',').map(h => h.trim());
+            const isValid = expectedHeaders.every((h, i) => actualHeaders[i] === h);
+            if (!isValid) {
+                alert("CSV file is invalid. Please use a file with headers: " + expectedHeaders.join(", "));
+                return;
+            }
+            // Skip the first line (headers)
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                const [regNo, email, name, branch, semester] = line.split(',').map(x => x && x.trim());
+                if (regNo && email && name && branch && semester) {
+                    addCandidateRow(regNo, email, name, branch, semester);
+                }
+            }
             updateCandidateCount();
-        }
-
-        function updateCandidateCount() {
+            // Automatically send setup emails after import
             const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
-            document.getElementById('candidateCount').innerText = `(${table.rows.length})`;
-        }
-
-        function filterCandidates() {
-            const input = document.getElementById('searchInput').value.toLowerCase();
-            const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
+            const emails = [];
             for (let row of table.rows) {
-                let show = false;
-                for (let cell of row.cells) {
-                    if (cell.innerText.toLowerCase().includes(input)) {
-                        show = true;
-                        break;
-                    }
-                }
-                row.style.display = show ? '' : 'none';
+                const email = row.cells[1].innerText.trim();
+                if (email) emails.push(email);
             }
-        }
-
-        // CSV import/export logic
-        function importCSV() {
-            document.getElementById('csvInput').click();
-        }
-        document.getElementById('csvInput').onchange = function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                const lines = evt.target.result.split('\n').filter(line => line.trim() !== '');
-                // Validate headers
-                const expectedHeaders = ["Registration No", "Email ID", "Name", "Branch", "Semester"];
-                const actualHeaders = lines[0].split(',').map(h => h.trim());
-                const isValid = expectedHeaders.every((h, i) => actualHeaders[i] === h);
-                if (!isValid) {
-                    alert("CSV file is invalid. Please use a file with headers: " + expectedHeaders.join(", "));
-                    return;
-                }
-                // Skip the first line (headers)
-                for (let i = 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-                    const [regNo, email, name, branch, semester] = line.split(',').map(x => x && x.trim());
-                    if (regNo && email && name && branch && semester) {
-                        addCandidateRow(regNo, email, name, branch, semester);
-                    }
-                }
-                updateCandidateCount();
-                // Automatically send setup emails after import
-                const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
-                const emails = [];
-                for (let row of table.rows) {
-                    const email = row.cells[1].innerText.trim();
-                    if (email) emails.push(email);
-                }
-                if (emails.length > 0) {
-                    fetch('/send-setup-emails/', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ emails })
-                    });
-                }
-            };
-            reader.readAsText(file);
+            if (emails.length > 0) {
+                fetch('/send-setup-emails/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ emails })
+                });
+            }
         };
-        function exportCSV() {
-            const table = document.getElementById('candidateTable');
-            let csv = '';
-            for (let row of table.rows) {
-                let rowData = [];
-                for (let cell of row.cells) {
-                    rowData.push(cell.innerText);
-                }
-                csv += rowData.join(',') + '\n';
+        reader.readAsText(file);
+    };
+    function exportCSV() {
+        const table = document.getElementById('candidateTable');
+        let csv = '';
+        for (let row of table.rows) {
+            let rowData = [];
+            for (let cell of row.cells) {
+                rowData.push(cell.innerText);
             }
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'candidates.csv';
-            link.click();
+            csv += rowData.join(',') + '\n';
         }
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'candidates.csv';
+        link.click();
+    }
     // Initial candidate count update
     updateCandidateCount();
-    // ...existing code...
     </script>
 </body>
 </html>
