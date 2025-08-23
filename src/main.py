@@ -171,6 +171,7 @@ async def show_dashboard(request: Request):
 # Show create HOD form after login
 @app.get("/create-hod-form", response_class=HTMLResponse)
 async def show_create_hod_form(request: Request, hod_id: str = None):
+    from datetime import datetime
     hod_data = None
     if hod_id:
         from db.mongodb import get_db
@@ -184,11 +185,11 @@ async def show_create_hod_form(request: Request, hod_id: str = None):
                 "email": hod.get("email", ""),
                 "contact_number": hod.get("contact_number", ""),
                 "university_name": hod.get("university_name", ""),
-                "location": hod.get("location", ""),
                 "departments": ", ".join(hod.get("departments", [])) if isinstance(hod.get("departments"), list) else hod.get("departments", ""),
                 "registration_year": hod.get("registration_year", "")
             }
-    return templates.TemplateResponse("create_hod.html", {"request": request, "hod": hod_data})
+    current_year = datetime.now().year
+    return templates.TemplateResponse("create_hod.html", {"request": request, "hod": hod_data, "current_year": current_year})
 
 # Handle HOD form submission and call API
 @app.post("/submit-hod")
@@ -198,7 +199,6 @@ async def submit_hod(
     email: str = Form(...),
     contact_number: str = Form(...),
     university_name: str = Form(...),
-    location: str = Form(...),
     departments: str = Form(...),
     registration_year: str = Form(...),
     hod_id: str = Form(None)
@@ -216,7 +216,6 @@ async def submit_hod(
                 "email": email,
                 "contact_number": contact_number,
                 "university_name": university_name,
-                "location": location,
                 "departments": departments_list,
                 "registration_year": registration_year
             }}
@@ -236,7 +235,6 @@ async def submit_hod(
                         "email": email,
                         "contact_number": contact_number,
                         "university_name": university_name,
-                        "location": location,
                         "departments": departments,
                         "registration_year": registration_year
                     },
@@ -249,7 +247,6 @@ async def submit_hod(
             "email": email,
             "contact_number": contact_number,
             "university_name": university_name,
-            "location": location,
             "departments": departments_list,
             "registration_year": registration_year
         }
