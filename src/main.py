@@ -5,6 +5,7 @@ import os
 from fastapi.security import HTTPBasicCredentials
 from routes.hod import router as hod_router, PORTAL_USERNAME, PORTAL_HASHED_PASSWORD, authenticate
 from routes.registration import router as registration_router
+from routes.candidate_management import router as candidate_management_router
 import bcrypt
 import uvicorn
 import httpx
@@ -31,6 +32,7 @@ async def show_registration_form(request: Request):
     return templates.TemplateResponse("registration.html", {"request": request})
 
 # Password Setup Page (GET)
+
 @app.get("/setup-password", response_class=HTMLResponse)
 async def setup_password_form(request: Request, email: str = ""):
     username = email.split("@")[0] if email else ""
@@ -38,6 +40,7 @@ async def setup_password_form(request: Request, email: str = ""):
 
 
 # Password Setup Page (POST)
+
 @app.post("/setup-password", response_class=HTMLResponse)
 async def setup_password_submit(request: Request, username: str = Form(...), password: str = Form(...), confirm_password: str = Form(...)):
     if password != confirm_password:
@@ -47,10 +50,15 @@ async def setup_password_submit(request: Request, username: str = Form(...), pas
     # Store username and hashed password in MongoDB securely
     from db.mongodb import get_db
     hod_collection = get_db()
-    # Update HOD record with password (find by username)
+    # Check if username is already taken
+    existing_user = hod_collection.find_one({"username": username})
+    if existing_user:
+        return templates.TemplateResponse("setup_password.html", {"request": request, "username": username, "error": "Username is already taken. Please choose another."})
+
+    # Update HOD record with username and password (find by email prefix)
     result = hod_collection.update_one(
         {"email": {"$regex": f"^{username}@"}},
-        {"$set": {"password": hashed_pw.decode("utf-8")}},
+        {"$set": {"username": username, "password": hashed_pw.decode("utf-8")}},
         upsert=False
     )
 
@@ -66,6 +74,23 @@ async def setup_password_submit(request: Request, username: str = Form(...), pas
         }
     )
 
+# Check if username is unique (for live validation)
+from fastapi import Query
+@app.get("/check-username-unique")
+async def check_username_unique(username: str = Query(...)):
+    from db.mongodb import get_db
+    hod_collection = get_db()
+    exists = hod_collection.find_one({"username": username})
+    return {"unique": not bool(exists)}
+
+# Check for candidate duplicate (manual entry)
+@app.get("/check-candidate-duplicate")
+async def check_candidate_duplicate(email: str = Query(...), regNo: str = Query(...)):
+    from db.mongodb import get_db
+    users_collection = get_db()
+    duplicate = users_collection.find_one({"$or": [{"email": email}, {"regNo": regNo}]})
+    return {"duplicate": bool(duplicate)}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -77,6 +102,8 @@ app.add_middleware(
 
 app.include_router(hod_router)
 app.include_router(registration_router)
+print("Including candidate_management_router at root prefix for /candidate-management route")
+app.include_router(candidate_management_router, prefix="")
 
 # Show login page on root
 @app.get("/", response_class=HTMLResponse)
