@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, Request, Form, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -15,12 +16,28 @@ from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from starlette.status import HTTP_400_BAD_REQUEST
 from routes.hod import router as hod_router
+from bson import ObjectId
 
 
+# Only one app = FastAPI() and template setup at the top
 app = FastAPI()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+# Register /delete-hod endpoint directly with FastAPI (not via router)
+@app.post("/delete-hod")
+async def delete_hod(hod_id: str = Form(...)):
+    from db.mongodb import get_db
+    hod_collection = get_db()
+    print(f"[DEBUG] Received hod_id for delete: {hod_id}")
+    try:
+        result = hod_collection.delete_one({"_id": ObjectId(hod_id)})
+        print(f"[DEBUG] Delete result: deleted_count={result.deleted_count}")
+        return {"success": result.deleted_count == 1}
+    except Exception as e:
+        print(f"[DEBUG] Exception during delete: {e}")
+        return {"success": False, "error": str(e)}
 
 
 # In-memory HOD user store for demo (replace with DB in production)
@@ -115,7 +132,7 @@ async def show_login(request: Request):
 async def login(request: Request, username: str = Form(...), password: str = Form(...)):
     # Portal Owner login
     if username == PORTAL_USERNAME and bcrypt.checkpw(password.encode(), PORTAL_HASHED_PASSWORD):
-        return RedirectResponse(url="/create-hod-form", status_code=303)
+        return RedirectResponse(url="/dashboard", status_code=303)
 
     # HOD login (validate from MongoDB)
     from db.mongodb import get_db
@@ -125,7 +142,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
     if hod_user and "password" in hod_user:
         db_hashed_pw = hod_user["password"].encode("utf-8")
         if bcrypt.checkpw(password.encode(), db_hashed_pw):
-            return RedirectResponse(url="/main", status_code=303)
+            return RedirectResponse(url="/candidate-management", status_code=303)
 
     return templates.TemplateResponse(
         "login.html",
@@ -134,15 +151,44 @@ async def login(request: Request, username: str = Form(...), password: str = For
             "error": "<span style='color:#c0392b;font-weight:bold;'>Login failed: Invalid credentials.</span>"
         }
     )
+
 # Main Portal for HOD
 @app.get("/main", response_class=HTMLResponse)
 async def show_main_portal(request: Request):
     return templates.TemplateResponse("main.html", {"request": request})
 
+# Dashboard for Portal Owner (shows HOD table)
+@app.get("/dashboard", response_class=HTMLResponse)
+async def show_dashboard(request: Request):
+    from db.mongodb import get_db
+    hod_collection = get_db()
+    hods = list(hod_collection.find({"user_type": "hod"}))
+    # Convert ObjectId to string for Jinja
+    for hod in hods:
+        hod["_id"] = str(hod["_id"])
+    return templates.TemplateResponse("dashboard.html", {"request": request, "hods": hods})
+
 # Show create HOD form after login
 @app.get("/create-hod-form", response_class=HTMLResponse)
-async def show_create_hod_form(request: Request):
-    return templates.TemplateResponse("create_hod.html", {"request": request})
+async def show_create_hod_form(request: Request, hod_id: str = None):
+    hod_data = None
+    if hod_id:
+        from db.mongodb import get_db
+        hod_collection = get_db()
+        from bson import ObjectId
+        hod = hod_collection.find_one({"_id": ObjectId(hod_id)})
+        if hod:
+            hod_data = {
+                "_id": str(hod["_id"]),
+                "name": hod.get("name", ""),
+                "email": hod.get("email", ""),
+                "contact_number": hod.get("contact_number", ""),
+                "university_name": hod.get("university_name", ""),
+                "location": hod.get("location", ""),
+                "departments": ", ".join(hod.get("departments", [])) if isinstance(hod.get("departments"), list) else hod.get("departments", ""),
+                "registration_year": hod.get("registration_year", "")
+            }
+    return templates.TemplateResponse("create_hod.html", {"request": request, "hod": hod_data})
 
 # Handle HOD form submission and call API
 @app.post("/submit-hod")
@@ -154,85 +200,98 @@ async def submit_hod(
     university_name: str = Form(...),
     location: str = Form(...),
     departments: str = Form(...),
-    registration_year: str = Form(...)
+    registration_year: str = Form(...),
+    hod_id: str = Form(None)
 ):
-    # Prepare payload
-    payload = {
-        "name": name,
-        "email": email,
-        "contact_number": contact_number,
-        "university_name": university_name,
-        "location": location,
-        "departments": [d.strip() for d in departments.split(",")],
-        "registration_year": registration_year
-    }
-    # Call create_hod API
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "http://127.0.0.1:8000/api/create-hod",
-            json=payload,
-            auth=(PORTAL_USERNAME, "secret123")
+    from db.mongodb import get_db
+    from bson import ObjectId
+    hod_collection = get_db()
+    departments_list = [d.strip() for d in departments.split(",")]
+    if hod_id:
+        # Update existing HOD
+        update_result = hod_collection.update_one(
+            {"_id": ObjectId(hod_id)},
+            {"$set": {
+                "name": name,
+                "email": email,
+                "contact_number": contact_number,
+                "university_name": university_name,
+                "location": location,
+                "departments": departments_list,
+                "registration_year": registration_year
+            }}
         )
-    if response.status_code == 200:
-        hod_id = response.json().get('hod_id')
+        return RedirectResponse(url="/dashboard", status_code=303)
+    else:
+        # Check for duplicate email before creating
+        existing = hod_collection.find_one({"email": email})
+        if existing:
+            # Render the form again with error message
+            return templates.TemplateResponse(
+                "create_hod.html",
+                {
+                    "request": request,
+                    "hod": {
+                        "name": name,
+                        "email": email,
+                        "contact_number": contact_number,
+                        "university_name": university_name,
+                        "location": location,
+                        "departments": departments,
+                        "registration_year": registration_year
+                    },
+                    "error": "A HOD with this email already exists."
+                }
+            )
+        # Prepare payload for create
+        payload = {
+            "name": name,
+            "email": email,
+            "contact_number": contact_number,
+            "university_name": university_name,
+            "location": location,
+            "departments": departments_list,
+            "registration_year": registration_year
+        }
+        # Call create_hod API
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://127.0.0.1:8000/api/create-hod",
+                json=payload,
+                auth=(PORTAL_USERNAME, "secret123")
+            )
+        if response.status_code == 200:
+            return RedirectResponse(url="/dashboard", status_code=303)
         return HTMLResponse(f"""
-        <html>
-        <head>
-            <title>HOD Created</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; background: #f4f6fa; }}
-                .success-container {{ max-width: 400px; margin: 80px auto; background: #fff; padding: 32px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; }}
-                .success-title {{ color: #2d3e50; font-size: 24px; margin-bottom: 16px; }}
-                .success-id {{ color: #27ae60; font-size: 20px; margin-bottom: 24px; }}
-                .back-btn {{ background: #2d3e50; color: #fff; border: none; border-radius: 4px; padding: 10px 24px; font-size: 16px; cursor: pointer; margin-top: 16px; }}
-                .back-btn:hover {{ background: #1a2533; }}
-            </style>
-        </head>
-        <body>
-            <div class="success-container">
-                <div style="text-align:center; margin-bottom: 24px;">
-                    <a href="https://www.lenovo.com/in/en/?Redirect=False" target="_blank">
-                        <img src="https://logos-world.net/wp-content/uploads/2022/07/Lenovo-Logo.png" alt="Lenovo Logo" style="height:100px;">
-                    </a>
+            <html>
+            <head>
+                <title>Error</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; background: #f4f6fa; }}
+                    .error-container {{ max-width: 400px; margin: 80px auto; background: #fff; padding: 32px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; }}
+                    .error-title {{ color: #c0392b; font-size: 24px; margin-bottom: 16px; }}
+                    .error-msg {{ color: #4a5a6a; font-size: 18px; margin-bottom: 24px; }}
+                    .back-btn {{ background: #2d3e50; color: #fff; border: none; border-radius: 4px; padding: 10px 24px; font-size: 16px; cursor: pointer; margin-top: 16px; }}
+                    .back-btn:hover {{ background: #1a2533; }}
+                </style>
+            </head>
+            <body>
+                <div class="error-container">
+                    <div style="text-align:center; margin-bottom: 24px;">
+                        <a href="https://www.lenovo.com/in/en/?Redirect=False" target="_blank">
+                            <img src="https://logos-world.net/wp-content/uploads/2022/07/Lenovo-Logo.png" alt="Lenovo Logo" style="height:100px;">
+                        </a>
+                    </div>
+                    <div class="error-title">Error Creating HOD</div>
+                    <div class="error-msg">{response.text}</div>
+                    <form action="/create-hod-form" method="get">
+                        <button class="back-btn" type="submit">Back to Form</button>
+                    </form>
                 </div>
-                <div class="success-title">HOD Created Successfully!</div>
-                <div class="success-id">HOD ID: {hod_id}</div>
-                <form action="/create-hod-form" method="get">
-                    <button class="back-btn" type="submit">Create Another HOD</button>
-                </form>
-            </div>
-        </body>
-        </html>
-        """)
-    return HTMLResponse(f"""
-        <html>
-        <head>
-            <title>Error</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; background: #f4f6fa; }}
-                .error-container {{ max-width: 400px; margin: 80px auto; background: #fff; padding: 32px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; }}
-                .error-title {{ color: #c0392b; font-size: 24px; margin-bottom: 16px; }}
-                .error-msg {{ color: #4a5a6a; font-size: 18px; margin-bottom: 24px; }}
-                .back-btn {{ background: #2d3e50; color: #fff; border: none; border-radius: 4px; padding: 10px 24px; font-size: 16px; cursor: pointer; margin-top: 16px; }}
-                .back-btn:hover {{ background: #1a2533; }}
-            </style>
-        </head>
-        <body>
-            <div class="error-container">
-                <div style="text-align:center; margin-bottom: 24px;">
-                    <a href="https://www.lenovo.com/in/en/?Redirect=False" target="_blank">
-                        <img src="https://logos-world.net/wp-content/uploads/2022/07/Lenovo-Logo.png" alt="Lenovo Logo" style="height:100px;">
-                    </a>
-                </div>
-                <div class="error-title">Error Creating HOD</div>
-                <div class="error-msg">{response.text}</div>
-                <form action="/create-hod-form" method="get">
-                    <button class="back-btn" type="submit">Back to Form</button>
-                </form>
-            </div>
-        </body>
-        </html>
-        """)
+            </body>
+            </html>
+            """)
 
 # Custom handler for missing fields
 @app.exception_handler(RequestValidationError)

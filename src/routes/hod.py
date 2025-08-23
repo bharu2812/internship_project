@@ -68,8 +68,6 @@ async def create_hod(hod: HOD, _: HTTPBasicCredentials = Depends(authenticate)):
         hod_data["user_type"] = "hod"
         hod_data["hod_id"] = hod_id  
 
-        result = hod_collection.insert_one(hod_data)
-
         # Send email to HOD after successful registration
         sender_email = "bharathisriram2001@gmail.com"
         receiver_email = hod.email
@@ -80,17 +78,24 @@ async def create_hod(hod: HOD, _: HTTPBasicCredentials = Depends(authenticate)):
         msg['Subject'] = subject
         msg['From'] = sender_email
         msg['To'] = receiver_email
+        mail_sent = False
         try:
             with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
                 smtp.login(sender_email, 'pyzs anhf fgum fkch')  # Use app password
                 smtp.send_message(msg)
+            mail_sent = True
         except Exception as e:
             print(f"Error sending email: {e}")
+            mail_sent = False
+
+        hod_data["mail_sent"] = mail_sent
+        result = hod_collection.insert_one(hod_data)
 
         return {
             "id": str(result.inserted_id),
             "hod_id": hod_id,
-            "message": "Data inserted and email sent"
+            "message": "Data inserted and email sent",
+            "mail_sent": mail_sent
         }
     except HTTPException:
         raise
