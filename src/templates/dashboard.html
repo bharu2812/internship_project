@@ -30,8 +30,7 @@
                     <th onclick="sortTable('hod-table', 2)" style="cursor:pointer;">Contact Number</th>
                     <th onclick="sortTable('hod-table', 3)" style="cursor:pointer;">University Name</th>
                     <th onclick="sortTable('hod-table', 4)" style="cursor:pointer;">Departments</th>
-                    <th onclick="sortTable('hod-table', 5)" style="cursor:pointer;">Location</th>
-                    <th onclick="sortTable('hod-table', 6)" style="cursor:pointer;">Registration Year</th>
+                    <th onclick="sortTable('hod-table', 5)" style="cursor:pointer;">Registration Year</th>
                     <th class="text-center">Actions</th>
                 </tr>
                 </thead>
@@ -49,7 +48,6 @@
                     <td>{{ hod.contact_number }}</td>
                     <td>{{ hod.university_name }}</td>
                     <td>{% if hod.departments %}{{ hod.departments | join(', ') }}{% endif %}</td>
-                    <td>{{ hod.location }}</td>
                     <td>{{ hod.registration_year }}</td>
                     <td class="text-center">
                         <!-- View Details removed as requested -->
