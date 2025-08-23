@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-5">
+    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 0.5rem;">
+        <img src="https://logos-world.net/wp-content/uploads/2022/07/Lenovo-Logo.png" alt="Lenovo Logo" style="height: 38px;">
+        <h2 class="mb-0" style="margin-bottom:0;">Dashboard</h2>
+    </div>
+    <!-- HOD Table -->
+    <div class="card mb-5">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>HOD</span>
+            <div class="d-flex align-items-center" style="gap: 10px;">
+                <input id="hod-search" type="text" class="form-control form-control-sm" placeholder="Search HODs..." style="width: 210px; min-width: 0;">
+                <button type="button" class="btn btn-primary btn-sm" onclick="openHodModal(); return false;">+</button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <table id="hod-table" class="table mb-0 table-hover dashboard-table">
+                <thead>
+                <tr>
+                    <th onclick="sortTable('hod-table', 0)" style="cursor:pointer;">Name</th>
+                    <th onclick="sortTable('hod-table', 1)" style="cursor:pointer;">Email</th>
+                    <th onclick="sortTable('hod-table', 2)" style="cursor:pointer;">Contact Number</th>
+                    <th onclick="sortTable('hod-table', 3)" style="cursor:pointer;">University Name</th>
+                    <th onclick="sortTable('hod-table', 4)" style="cursor:pointer;">Departments</th>
+                    <th onclick="sortTable('hod-table', 5)" style="cursor:pointer;">Location</th>
+                    <th onclick="sortTable('hod-table', 6)" style="cursor:pointer;">Registration Year</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- HOD records will be rendered here -->
+                {% for hod in hods %}
+                <tr style="cursor:pointer;" onclick="viewHodDetails('{{ hod._id }}')">
+                    <td>
+                        {{ hod.name }}
+                        {% if hod.mail_sent %}
+                            <span title="Mail sent" style="color:green;font-size:1em;vertical-align:middle;">&#9993;</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ hod.email }}</td>
+                    <td>{{ hod.contact_number }}</td>
+                    <td>{{ hod.university_name }}</td>
+                    <td>{% if hod.departments %}{{ hod.departments | join(', ') }}{% endif %}</td>
+                    <td>{{ hod.location }}</td>
+                    <td>{{ hod.registration_year }}</td>
+                    <td class="text-center">
+                        <!-- View Details removed as requested -->
+                        <a href="#" title="Edit HOD" style="margin-left:10px;text-decoration:none;" onclick="event.stopPropagation(); openHodModal('{{ hod._id }}'); return false;">
+                            <span style="color:#ffc107;font-size:1.3em;vertical-align:middle;" title="Edit HOD">&#9998;</span>
+                        </a>
+                        <a href="#" title="Delete HOD" style="margin-left:10px;text-decoration:none;" onclick="event.stopPropagation(); deleteHod('{{ hod._id }}'); return false;">
+                            <span style="color:#dc3545;font-size:1.3em;vertical-align:middle;" title="Delete HOD">&#128465;</span>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+                <tr id="hod-no-results" style="display:none;">
+                    <td colspan="8" class="text-center text-muted">No results found</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Mentor Table -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Mentors</span>
+            <div class="d-flex align-items-center" style="gap: 10px;">
+                <input id="mentor-search" type="text" class="form-control form-control-sm" placeholder="Search Mentors..." style="width: 210px; min-width: 0;">
+                <button class="btn btn-secondary btn-sm" disabled>+</button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <table class="table mb-0 table-hover dashboard-table">
+                <thead>
+                <tr>
+                    <th>Name</th>
+                    <th class="text-end">Email</th>
+                    <th class="text-end">Contact Number</th>
+                    <th>Location</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- Mentor records placeholder -->
+                <tr id="mentor-no-results" style="display:none;">
+                    <td colspan="5" class="text-center text-muted">No results found</td>
+                </tr>
+                </tbody>
+</script>
+<script>
+// Mentor and HOD table search filter with 'No results found' row
+document.addEventListener('DOMContentLoaded', function() {
+    // Mentor table
+    const mentorSearchInput = document.getElementById('mentor-search');
+    if (mentorSearchInput) {
+        mentorSearchInput.addEventListener('input', function() {
+            const filter = mentorSearchInput.value.trim().toLowerCase();
+            const tables = document.querySelectorAll('.dashboard-table');
+            const table = tables.length > 1 ? tables[1] : null;
+            if (!table) return;
+            const rows = Array.from(table.tBodies[0].querySelectorAll('tr'));
+            let visibleCount = 0;
+            rows.forEach(row => {
+                if (row.id === 'mentor-no-results') return;
+                const tds = row.querySelectorAll('td');
+                if (!tds.length) return;
+                const text = [0,1,2,3].map(i => tds[i]?.innerText.toLowerCase() || '').join(' ');
+                const match = filter === '' || text.includes(filter);
+                row.style.display = match ? '' : 'none';
+                if (match) visibleCount++;
+            });
+            const noResultsRow = document.getElementById('mentor-no-results');
+            if (noResultsRow) noResultsRow.style.display = visibleCount === 0 ? '' : 'none';
+        });
+    }
+    // HOD table
+    const hodSearchInput = document.getElementById('hod-search');
+    if (hodSearchInput) {
+        hodSearchInput.addEventListener('input', function() {
+            const filter = hodSearchInput.value.trim().toLowerCase();
+            const table = document.getElementById('hod-table');
+            if (!table) return;
+            const rows = Array.from(table.tBodies[0].querySelectorAll('tr'));
+            let visibleCount = 0;
+            rows.forEach(row => {
+                if (row.id === 'hod-no-results') return;
+                const tds = row.querySelectorAll('td');
+                if (!tds.length) return;
+                const text = Array.from(tds).slice(0, 7).map(td => td.innerText.toLowerCase()).join(' ');
+                const match = filter === '' || text.includes(filter);
+                row.style.display = match ? '' : 'none';
+                if (match) visibleCount++;
+            });
+            const noResultsRow = document.getElementById('hod-no-results');
+            if (noResultsRow) noResultsRow.style.display = visibleCount === 0 ? '' : 'none';
+        });
+    }
+});
+// Simple client-side table sort for HOD table
+let hodSortDirections = Array(7).fill(true); // true = asc, false = desc
+function sortTable(tableId, colIdx) {
+    const table = document.getElementById(tableId);
+    const tbody = table.tBodies[0];
+    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => row.querySelector('td'));
+    const isAsc = hodSortDirections[colIdx];
+    rows.sort((a, b) => {
+        let aText = a.children[colIdx].innerText.trim();
+        let bText = b.children[colIdx].innerText.trim();
+        // Try to compare as numbers if possible
+        let aNum = parseFloat(aText.replace(/[^\d.\-]/g, ''));
+        let bNum = parseFloat(bText.replace(/[^\d.\-]/g, ''));
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return isAsc ? aNum - bNum : bNum - aNum;
+        }
+        return isAsc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+    });
+    rows.forEach(row => tbody.appendChild(row));
+    hodSortDirections[colIdx] = !isAsc;
+}
+</script>
+                
+                <!-- Mentor records placeholder -->
+                <tr>
+                    <td class="text-center" colspan="1"></td>
+                    <td class="text-end" colspan="1"></td>
+                    <td class="text-end" colspan="1"></td>
+                    <td class="text-center" colspan="1"></td>
+                    <td class="text-center" colspan="1"></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- HOD Modal -->
+<style>
+    .dashboard-table tbody tr:hover {
+        background: #f3f7fd !important;
+        transition: background 0.15s;
+    }
+    .modal.hod-centered .modal-dialog {
+        display: flex;
+        align-items: center;
+        min-height: 100vh;
+        justify-content: center;
+        max-width: 980px;
+        margin: 0 auto;
+    }
+    .modal.hod-centered .modal-content {
+        border-radius: 18px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+        width: 700px;
+        max-width: 95vw;
+        max-height: 95vh;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+    }
+    .modal.hod-centered .modal-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 0;
+        max-height: 70vh;
+    }
+    body.modal-open {
+        overflow: hidden !important;
+        position: fixed;
+        width: 100vw;
+    }
+</style>
+<div class="modal fade hod-centered" id="hodModal" tabindex="-1" aria-labelledby="hodModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="hodModalLabel">HOD Form</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="hodModalBody">
+                <!-- Form will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function openHodModal(hodId) {
+    let url = '/create-hod-form';
+    if (hodId) url += '?hod_id=' + encodeURIComponent(hodId);
+    fetch(url)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('hodModalBody').innerHTML = html;
+            var myModal = new bootstrap.Modal(document.getElementById('hodModal'));
+            myModal.show();
+        });
+}
+
+// Intercept form submit in modal to use AJAX
+document.addEventListener('submit', function(e) {
+    if (e.target.closest('#hodModalBody form')) {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        fetch(form.action, {
+            method: form.method,
+            body: formData
+        })
+        .then(response => {
+            if (response.redirected || response.ok) {
+                // Close modal and refresh page
+                bootstrap.Modal.getInstance(document.getElementById('hodModal')).hide();
+                window.location.reload();
+            } else {
+                return response.text().then(html => {
+                    document.getElementById('hodModalBody').innerHTML = html;
+                });
+            }
+        });
+    }
+});
+
+function deleteHod(hodId) {
+    if (!confirm('Are you sure you want to delete this HOD?')) return;
+    fetch('/delete-hod', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'hod_id=' + encodeURIComponent(hodId)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Robustly find and remove the row
+            let row = null;
+            // Try to find by delete button
+            const btn = document.querySelector(`a[onclick*="deleteHod('${hodId}')"]`);
+            if (btn) row = btn.closest('tr');
+            // Fallback: try by data attribute if you add it
+            if (!row) row = document.querySelector(`tr[data-hod-id='${hodId}']`);
+            if (row) {
+                row.remove();
+                showToast('HOD deleted successfully.', 'success');
+            } else {
+                // If not found, reload as fallback
+                window.location.reload();
+            }
+        } else {
+            showToast('Failed to delete HOD.', 'danger');
+        }
+    })
+    .catch(() => showToast('Error deleting HOD.', 'danger'));
+}
+
+// Simple toast message
+function showToast(message, type) {
+    let toast = document.getElementById('dashboard-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'dashboard-toast';
+        toast.style.position = 'fixed';
+        toast.style.top = '30px';
+        toast.style.right = '30px';
+        toast.style.zIndex = 9999;
+        toast.style.minWidth = '220px';
+        toast.style.padding = '14px 24px';
+        toast.style.borderRadius = '7px';
+        toast.style.fontSize = '1.08rem';
+        toast.style.fontWeight = '600';
+        toast.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.style.background = type === 'success' ? '#27ae60' : '#c0392b';
+    toast.style.color = '#fff';
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 2000);
+}
+</script>
+</body>
+</html>
