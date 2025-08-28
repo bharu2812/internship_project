@@ -149,6 +149,7 @@
                         <th>Name</th>
                         <th>Branch</th>
                         <th>Semester</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -184,6 +185,7 @@
     async function reloadCandidates() {
         const response = await fetch('/candidates/');
         const data = await response.json();
+        console.log('Candidates from backend:', data.candidates);
         const tableBody = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
         tableBody.innerHTML = '';
         if (Array.isArray(data.candidates)) {
@@ -247,7 +249,70 @@
         row.insertCell(2).innerText = name;
         row.insertCell(3).innerText = branch;
         row.insertCell(4).innerText = semester;
+        // Action column with edit and delete icons
+        const actionCell = row.insertCell(5);
+        actionCell.innerHTML = `
+            <span title="Edit" style="cursor:pointer;margin-right:10px;color:#2980b9;font-size:1.2em;" onclick="editCandidate(this)">&#9998;</span>
+            <span title="Delete" style="cursor:pointer;color:#c0392b;font-size:1.2em;" onclick="deleteCandidate(this)">&#128465;</span>
+        `;
+        row.setAttribute('data-email', email);
         updateCandidateCount();
+    }
+    let editModal = null;
+    async function editCandidate(icon) {
+        const row = icon.closest('tr');
+        const regNo = row.cells[0].innerText.trim();
+        const email = row.cells[1].innerText.trim();
+        const name = row.cells[2].innerText.trim();
+        const branch = row.cells[3].innerText.trim();
+        const semester = row.cells[4].innerText.trim();
+        // Pass all fields as query params for prefill
+        const params = new URLSearchParams({
+            regNo, email, name, branch, semester, edit: '1'
+        });
+        const response = await fetch(`/register?${params.toString()}`);
+        const html = await response.text();
+        // Create modal if not exists
+        if (!editModal) {
+            editModal = document.createElement('div');
+            editModal.id = 'editCandidateModal';
+            editModal.style.position = 'fixed';
+            editModal.style.top = '0';
+            editModal.style.left = '0';
+            editModal.style.width = '100vw';
+            editModal.style.height = '100vh';
+            editModal.style.background = 'rgba(0,0,0,0.3)';
+            editModal.style.zIndex = '9999';
+            editModal.style.display = 'flex';
+            editModal.style.justifyContent = 'center';
+            editModal.style.alignItems = 'center';
+            document.body.appendChild(editModal);
+        }
+        // Increase modal width
+    editModal.innerHTML = `<div style='background:#fff;padding:32px 48px;min-width:600px;max-width:900px;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.10);'>${html}</div>`;
+        editModal.style.display = 'flex';
+    }
+    function closeEditModal() {
+        if (editModal) editModal.style.display = 'none';
+    }
+    async function deleteCandidate(icon) {
+        if (!confirm('Are you sure you want to delete this candidate?')) return;
+        const row = icon.closest('tr');
+        const email = row.getAttribute('data-email');
+        if (!email) return;
+        // Call backend to delete
+        const response = await fetch('/delete-candidate/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const result = await response.json();
+        if (result.success) {
+            row.remove();
+            updateCandidateCount();
+        } else {
+            alert('Failed to delete candidate.');
+        }
     }
 
     function updateCandidateCount() {
@@ -273,46 +338,27 @@
     function importCSV() {
         document.getElementById('csvInput').click();
     }
-    document.getElementById('csvInput').onchange = function(e) {
+    document.getElementById('csvInput').onchange = async function(e) {
         const file = e.target.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            const lines = evt.target.result.split('\n').filter(line => line.trim() !== '');
-            // Validate headers
-            const expectedHeaders = ["Registration No", "Email ID", "Name", "Branch", "Semester"];
-            const actualHeaders = lines[0].split(',').map(h => h.trim());
-            const isValid = expectedHeaders.every((h, i) => actualHeaders[i] === h);
-            if (!isValid) {
-                alert("CSV file is invalid. Please use a file with headers: " + expectedHeaders.join(", "));
-                return;
-            }
-            // Skip the first line (headers)
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                const [regNo, email, name, branch, semester] = line.split(',').map(x => x && x.trim());
-                if (regNo && email && name && branch && semester) {
-                    addCandidateRow(regNo, email, name, branch, semester);
-                }
-            }
-            updateCandidateCount();
-            // Automatically send setup emails after import
-            const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
-            const emails = [];
-            for (let row of table.rows) {
-                const email = row.cells[1].innerText.trim();
-                if (email) emails.push(email);
-            }
-            if (emails.length > 0) {
-                fetch('/send-setup-emails/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ emails })
-                });
-            }
-        };
-        reader.readAsText(file);
+        // Upload CSV to backend
+        const formData = new FormData();
+        formData.append('file', file);
+        const uploadResponse = await fetch('/upload-csv/', {
+            method: 'POST',
+            body: formData
+        });
+        const uploadData = await uploadResponse.json();
+        // Send setup emails only to new students
+        if (uploadData.new_emails && uploadData.new_emails.length > 0) {
+            await fetch('/send-setup-emails/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ emails: uploadData.new_emails })
+            });
+        }
+        // Reload candidates from backend to update table
+        await reloadCandidates();
     };
     function exportCSV() {
         const table = document.getElementById('candidateTable');

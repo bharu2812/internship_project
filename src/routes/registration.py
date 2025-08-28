@@ -19,10 +19,7 @@ async def register_user(
     location: str = Form(...),
     semester: str = Form(...),
     branch: str = Form(...),
-    projects: str = Form(...),
-    skills: str = Form(...),
-    certifications: str = Form(...),
-    achievements: str = Form(...)
+    
 ):
     candidate_collection = get_db()
     # Check for duplicate registration
@@ -49,11 +46,7 @@ async def register_user(
         university_name=university_name,
         location=location,
         semester=semester,
-        branch=branch,
-        projects=projects,
-        skills=skills,
-        certifications=certifications,
-        achievements=achievements
+        branch=branch
     )
     candidate_data = candidate.dict()
     candidate_data["user_type"] = "candidate"
