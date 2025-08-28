@@ -1,44 +1,131 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Create HOD</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body { font-family: Arial, sans-serif; background: #f4f6fa; }
-        .container { max-width: 400px; margin: 80px auto; background: #fff; padding: 32px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #2d3e50; }
-        label { display: block; margin-top: 16px; }
-        input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; }
-        button { width: 100%; padding: 10px; margin-top: 24px; background: #2d3e50; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        button:hover { background: #1a2533; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div style="text-align:center; margin-bottom: 24px;">
-            <a href="https://www.lenovo.com/in/en/?Redirect=False" target="_blank">
-                <img src="https://logos-world.net/wp-content/uploads/2022/07/Lenovo-Logo.png" alt="Lenovo Logo" style="height:100px;">
-            </a>
+<style>
+    .hod-modal-card {
+        max-width: 800px;
+        min-height: 320px;
+        margin: 0 auto;
+        background: #f8fafc;
+        padding: 0 0 0 0;
+        border-radius: 12px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+        font-family: 'Segoe UI', Arial, sans-serif;
+        border: 1.5px solid #e0e0e0;
+        overflow: visible;
+    }
+    .hod-modal-card .section-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #222;
+        margin-bottom: 0.2rem;
+        padding: 32px 32px 0 32px;
+    }
+    .hod-modal-card .section-desc {
+        color: #555;
+        font-size: 1.01rem;
+        margin-bottom: 1.1rem;
+        padding: 0 32px;
+    }
+    .hod-modal-card hr {
+        margin: 0.8rem 0 1.2rem 0;
+        border: none;
+        border-top: 1.5px solid #e0e0e0;
+    }
+    .hod-modal-card form {
+        padding: 0 32px 0 32px;
+    }
+    .hod-modal-card label {
+        margin-top: 0.7rem;
+        font-weight: 500;
+        color: #222;
+        font-size: 1.01rem;
+    }
+    .hod-modal-card input[type="text"],
+    .hod-modal-card input[type="email"],
+    .hod-modal-card input[type="password"],
+    .hod-modal-card select {
+        width: 100%;
+        padding: 11px 14px;
+        margin-top: 4px;
+        border: 1.5px solid #e0e0e0;
+        border-radius: 7px;
+        font-size: 1.08rem;
+        background: #fff;
+        transition: border 0.2s, box-shadow 0.2s;
+        box-sizing: border-box;
+    }
+    .hod-modal-card input:focus {
+        border: 1.5px solid #1976d2;
+        outline: none;
+        background: #fff;
+        box-shadow: 0 0 0 2px #e3eefd;
+    }
+    .hod-modal-card .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        padding: 0 32px 1.5rem 32px;
+    }
+    .hod-modal-card button, .hod-modal-card .btn-cancel {
+        min-width: 110px;
+        padding: 10px 0;
+        border-radius: 7px;
+        font-size: 1.08rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        border: none;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s;
+    }
+    .hod-modal-card button[type="submit"] {
+        background: #1976d2;
+        color: #fff;
+    }
+    .hod-modal-card button[type="submit"]:hover {
+        background: #125ea2;
+    }
+    .hod-modal-card .btn-cancel {
+        background: #fff;
+        color: #333;
+        border: 1.5px solid #e0e0e0;
+    }
+    .hod-modal-card .btn-cancel:hover {
+        background: #f3f3f3;
+    }
+</style>
+<div class="hod-modal-card">
+    {% if error %}
+        <div style="color: #c0392b; background: #fff3f3; border: 1px solid #e57373; border-radius: 6px; padding: 10px 18px; margin: 18px 32px 0 32px; font-weight: 500;">
+            {{ error }}
         </div>
-        <h2>Create HOD</h2>
-        <form method="post" action="/submit-hod">
-            <label for="name">Name</label>
-            <input type="text" id="name" name="name" required>
-            <label for="email">Email</label>
-            <input type="email" id="email" name="email" required>
-            <label for="contact_number">Contact Number (Give in 10 digits)</label>
-            <input type="text" id="contact_number" name="contact_number" required>
-            <label for="university_name">University Name</label>
-            <input type="text" id="university_name" name="university_name" required>
-            <label for="location">Location</label>
-            <input type="text" id="location" name="location" required>
-            <label for="departments">Departments (Comma separated)</label>
-            <input type="text" id="departments" name="departments" required>
-            <label for="registration_year">Registration Year</label>
-            <input type="text" id="registration_year" name="registration_year" required>
-            <button type="submit">Submit</button>
-        </form>
-    </div>
-</body>
-</html>
+    {% endif %}
+    <div class="section-title">Details</div>
+    <div class="section-desc">Fill in the HOD details below. All fields are required.</div>
+    <hr>
+    <form method="post" action="/submit-hod">
+        {% if hod %}
+            <input type="hidden" name="hod_id" value="{{ hod._id }}">
+        {% endif %}
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required value="{{ hod.name if hod else '' }}">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required value="{{ hod.email if hod else '' }}">
+        <label for="contact_number">Contact Number (Give in 10 digits)</label>
+        <input type="text" id="contact_number" name="contact_number" required value="{{ hod.contact_number if hod else '' }}">
+        <label for="university_name">University Name</label>
+        <select id="university_name" name="university_name" required>
+            <option value="">Select University</option>
+            <option value="Sastra" {% if hod and hod.university_name == 'Sastra' %}selected{% endif %}>Sastra</option>
+            <option value="ITER" {% if hod and hod.university_name == 'ITER' %}selected{% endif %}>ITER</option>
+            <option value="KIIT" {% if hod and hod.university_name == 'KIIT' %}selected{% endif %}>KIIT</option>
+            <option value="VIT" {% if hod and hod.university_name == 'VIT' %}selected{% endif %}>VIT</option>
+        </select>
+        <label for="departments">Departments (Comma separated)</label>
+        <input type="text" id="departments" name="departments" required value="{{ hod.departments if hod else '' }}">
+        <label for="registration_year">Registration Year</label>
+    <input type="text" id="registration_year" name="registration_year" required readonly value="{{ hod.registration_year if hod and hod.registration_year else current_year }}">
+        <div class="form-actions">
+            <button type="button" class="btn-cancel" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit">{{ 'Save' if hod else 'Submit' }}</button>
+        </div>
+    </form>
+</div>

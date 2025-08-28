@@ -10,7 +10,6 @@ class HOD(BaseModel):
     email: EmailStr
     contact_number: str = Field(..., pattern=r'^\d{10}$', description="10 digit phone number")
     university_name: str = Field(..., min_length=1, description="University name")
-    location: str = Field(..., min_length=1, description="Location")
     departments: List[str] = Field(..., min_items=1, description="List of departments")
 
     registration_year: str = Field(..., pattern=r'^(19|20)\d{2}$', description="4-digit registration year")
