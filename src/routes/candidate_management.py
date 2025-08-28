@@ -1,26 +1,55 @@
-from fastapi import APIRouter
-# Get all candidates for frontend table
 
-# ...existing code...
+from fastapi import APIRouter, Body, Request, UploadFile, File
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+import os
+from csv_utils import extract_emails_from_csv, send_password_setup_email
+import threading
 
 router = APIRouter(prefix="", tags=["candidate_management"])
 
+
+
 # ...existing code...
-from fastapi import APIRouter
-@router.get("/candidates/")
-async def get_candidates():
-    from db.mongodb import get_db
-    users_collection = get_db()
-    candidates = list(users_collection.find({}, {"_id": 0}))
-    return {"candidates": candidates}
+
 from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi import Body
 import os
 from csv_utils import extract_emails_from_csv, send_password_setup_email
+import threading
 
 router = APIRouter(prefix="", tags=["candidate_management"])
+
+@router.post("/delete-candidate/")
+async def delete_candidate(payload: dict = Body(...)):
+    email = payload.get("email")
+    print(f"[DELETE DEBUG] Received email for deletion: {email}")
+    if not email:
+        print("[DELETE DEBUG] Missing email in payload.")
+        return {"success": False, "error": "Missing email."}
+    from db.mongodb import get_db
+    users_collection = get_db()
+    result = users_collection.delete_one({"email": email})
+    print(f"[DELETE DEBUG] Deletion result: deleted_count={result.deleted_count}")
+    return {"success": result.deleted_count == 1}
+from fastapi import APIRouter, Request, UploadFile, File
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi import Body
+import os
+from csv_utils import extract_emails_from_csv, send_password_setup_email
+import threading
+
+router = APIRouter(prefix="", tags=["candidate_management"])
+
+@router.get("/candidates/")
+async def get_candidates():
+    from db.mongodb import get_db
+    users_collection = get_db()
+    candidates = list(users_collection.find({}, {"_id": 0}))
+    return {"candidates": candidates}
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(os.path.dirname(BASE_DIR), "templates")
@@ -36,14 +65,41 @@ async def upload_csv(file: UploadFile = File(...)):
     file_location = f"uploaded_{file.filename}"
     with open(file_location, "wb") as f:
         f.write(await file.read())
-    emails = extract_emails_from_csv(file_location)
+    # Read CSV and extract full candidate data
+    candidates = []
+    with open(file_location, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+        # Expect headers: Registration No, Email ID, Name, Branch, Semester
+        for line in lines[1:]:
+            parts = [x.strip() for x in line.strip().split(",")]
+            # Always create a candidate dict with all fields, using empty string if missing
+            regNo = parts[0] if len(parts) > 0 else ""
+            email = parts[1] if len(parts) > 1 else ""
+            name = parts[2] if len(parts) > 2 else ""
+            branch = parts[3] if len(parts) > 3 else ""
+            semester = parts[4] if len(parts) > 4 else ""
+            if email:  # Only add if email is present
+                candidates.append({
+                    "regNo": regNo,
+                    "email": email,
+                    "name": name,
+                    "branch": branch,
+                    "semester": semester,
+                    "email_sent": False
+                })
     from db.mongodb import get_db
     users_collection = get_db()
     new_emails = []
-    for email in emails:
-        if not users_collection.find_one({"email": email}):
-            users_collection.insert_one({"email": email, "email_sent": False})
-            new_emails.append(email)
+    for candidate in candidates:
+        # Upsert: update existing or insert new candidate
+        result = users_collection.update_one(
+            {"email": candidate["email"]},
+            {"$set": candidate},
+            upsert=True
+        )
+        # Only send email if this is a new candidate
+        if result.upserted_id:
+            new_emails.append(candidate["email"])
     return {"message": "CSV processed.", "new_emails": new_emails}
 
 # New endpoint to send setup emails to students in the list
@@ -52,39 +108,37 @@ async def send_setup_emails(payload: dict = Body(...)):
     emails = payload.get("emails", [])
     sender_email = "bharathisriram2001@gmail.com"
     sender_password = "pyzs anhf fgum fkch"  # Use app password
-    sent = []
-    failed = []
-    error_details = {}
-    from db.mongodb import get_db
-    users_collection = get_db()
-    for email in emails:
-        # Only send if not already sent
-        existing = users_collection.find_one({"email": email, "email_sent": True})
-        if existing:
-            continue  # Skip already sent
-        setup_url = f"http://127.0.0.1:8000/setup-password?email={email}"
-        try:
-            result = send_password_setup_email(email, setup_url, sender_email, sender_password)
-            if result:
-                sent.append(email)
-                users_collection.update_one(
-                    {"email": email},
-                    {"$set": {"email_sent": True}},
-                    upsert=True
-                )
-            else:
+    def send_emails_thread(emails):
+        sent = []
+        failed = []
+        error_details = {}
+        from db.mongodb import get_db
+        users_collection = get_db()
+        for email in emails:
+            existing = users_collection.find_one({"email": email, "email_sent": True})
+            if existing:
+                continue
+            setup_url = f"http://127.0.0.1:8000/setup-password?email={email}"
+            try:
+                result = send_password_setup_email(email, setup_url, sender_email, sender_password)
+                if result:
+                    sent.append(email)
+                    users_collection.update_one(
+                        {"email": email},
+                        {"$set": {"email_sent": True}},
+                        upsert=True
+                    )
+                else:
+                    failed.append(email)
+                    error_details[email] = f"Email sending failed (see backend logs)"
+            except Exception as e:
                 failed.append(email)
-                error_details[email] = f"Email sending failed (see backend logs)"
-        except Exception as e:
-            failed.append(email)
-            error_details[email] = str(e)
-            print(f"Error sending to {email}: {e}")
-    print(f"Send email summary: Sent={sent}, Failed={failed}, Details={error_details}")
-    return {
-        "emails_sent": sent,
-        "emails_failed": failed,
-        "error_details": error_details
-    }
+                error_details[email] = str(e)
+                print(f"Error sending to {email}: {e}")
+        print(f"Send email summary: Sent={sent}, Failed={failed}, Details={error_details}")
+    # Start background thread for sending emails
+    threading.Thread(target=send_emails_thread, args=(emails,), daemon=True).start()
+    return {"status": "Email sending started in background."}
 
 # @router.get("/candidates/")
 # async def get_candidates():

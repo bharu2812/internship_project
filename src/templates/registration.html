@@ -6,45 +6,189 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body { font-family: Arial, sans-serif; background: #f4f6fa; }
-        .container { max-width: 400px; margin: 80px auto; background: #fff; padding: 32px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #2d3e50; }
-        label { display: block; margin-top: 16px; }
-        input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; }
-        button { width: 100%; padding: 10px; margin-top: 24px; background: #2d3e50; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        button:hover { background: #1a2533; }
+        .modal-container {
+        max-width: 500px;
+        min-width: 350px;
+        margin: 40px auto;
+        border-radius: 8px;
+        background: transparent;        /*  only one white background */
+        position: relative;
+        height: auto;
+        }
+
+        h2 {
+            text-align: left;
+            color: #2d3e50;
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 18px;
+        }
+        label {
+            display: block;
+            margin-top: 18px;
+            color: #2d3e50;
+            font-weight: 500;
+        }
+        input[type="text"], input[type="email"], input[type="password"] {
+            width: 100%;
+            padding: 10px 14px;
+            margin-top: 6px;
+            border: 1px solid #e0e0e0;
+            border-radius: 7px;
+            font-size: 1rem;
+            background: #f9f9fb;
+            transition: border 0.2s;
+        }
+        input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus {
+            border: 1.5px solid #e53935;
+            outline: none;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 28px;
+            background: #e53935;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(229,57,53,0.08);
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #c0392b;
+        }
+        .modal-close {
+            position: absolute;
+            top: 18px;
+            right: 24px;
+            background: none;
+            border: none;
+            font-size: 2rem;
+            color: #888;
+            cursor: pointer;
+            z-index: 10;
+
+
+            
+        }
+        .modal-close:hover {
+            color: #e53935;
+        }
+        .project-entry {
+            background: #fff;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 16px;
+        }
+        .project-entry .form-control {
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .project-entry textarea {
+            height: 80px;
+            resize: none;
+        }
+        .btn-secondary {
+            background: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn-secondary:hover {
+            background: #0056b3;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div style="text-align:center; margin-bottom: 24px;">
-            <a href="https://www.lenovo.com/in/en/?Redirect=False" target="_blank">
-                <img src="https://logos-world.net/wp-content/uploads/2022/07/Lenovo-Logo.png" alt="Lenovo Logo" style="height:100px;">
-            </a>
-        </div>
-        <h2>Registration</h2>
-        <form method="post" action="/api/registrations">
-            <label for="university_registration_number">University Registration Number</label>
-            <input type="text" id="university_registration_number" name="university_registration_number" required>
-            <label for="name">Name</label>
-            <input type="text" id="name" name="name" required>
-            <label for="university_name">University Name</label>
-            <input type="text" id="university_name" name="university_name" required>
-            <label for="location">Location</label>
-            <input type="text" id="location" name="location" required>
-            <label for="semester">Semester</label>
-            <input type="text" id="semester" name="semester" required>
-            <label for="branch">Branch</label>
-            <input type="text" id="branch" name="branch" required>
-            <label for="projects">Projects</label>
-            <input type="text" id="projects" name="projects" required>
-            <label for="skills">Skills</label>
-            <input type="text" id="skills" name="skills" required>
-            <label for="certifications">Certifications</label>
-            <input type="text" id="certifications" name="certifications" required>
-            <label for="achievements">Achievements</label>
-            <input type="text" id="achievements" name="achievements" required>
-            <button type="submit">Register</button>
-        </form>
+    <form method="post" action="/api/registrations" id="studentForm" class="modal-container">
+
+        <h2 style="text-align:center;">Student Form</h2>
+    <label for="university_registration_number">University Registration Number</label>
+    <input type="text" id="university_registration_number" name="university_registration_number" required value="{{ regNo }}">
+
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" required value="{{ name }}">
+
+    <label for="email">Email</label>
+    <input type="text" id="email" name="email" required value="{{ email }}">
+
+    <label for="semester">Semester</label>
+    <input type="text" id="semester" name="semester" required value="{{ semester }}">
+
+    <label for="branch">Branch</label>
+    <input type="text" id="branch" name="branch" required value="{{ branch }}">
+
+    <div style="display:flex; gap:16px; margin-top:32px;">
+        <button type="submit" style="flex:1;">Save Changes</button>
+        <button type="button" style="flex:1; background:#888;" onclick="window.parent.closeEditModal && window.parent.closeEditModal()">Cancel</button>
     </div>
+</form>
+
+    <script>
+        function addProject() {
+            const container = document.getElementById('projects-container');
+            const projectEntry = document.createElement('div');
+            projectEntry.className = 'project-entry mb-3';
+            projectEntry.innerHTML = `
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <select class="form-control" onchange="toggleProjectInput(this)">
+                            <option value="file">Upload File</option>
+                            <option value="github">GitHub Link</option>
+                        </select>
+                        <div class="project-input mt-2">
+                            <input type="file" class="form-control file-input">
+                            <input type="text" class="form-control github-input" 
+                                   placeholder="GitHub Repository URL" style="display:none;">
+                        </div>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <textarea class="form-control" placeholder="Project Description"></textarea>
+                    </div>
+                    <button type="button" onclick="removeProject(this)" class="btn btn-danger ml-2">Remove</button>
+                </div>
+            `;
+            container.appendChild(projectEntry);
+        }
+
+        function removeProject(button) {
+            button.closest('.project-entry').remove();
+        }
+
+        function toggleProjectInput(select) {
+            const inputDiv = select.nextElementSibling;
+            const fileInput = inputDiv.querySelector('.file-input');
+            const githubInput = inputDiv.querySelector('.github-input');
+            
+            if (select.value === 'file') {
+                fileInput.style.display = 'block';
+                githubInput.style.display = 'none';
+            } else {
+                fileInput.style.display = 'none';
+                githubInput.style.display = 'block';
+            }
+        }
+    </script>
 </body>
 </html>
