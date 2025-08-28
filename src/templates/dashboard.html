@@ -256,7 +256,7 @@ document.addEventListener('submit', function(e) {
             body: formData
         })
         .then(response => {
-            if (response.redirected || response.ok) {
+            if (response.redirected) {
                 // Close modal and refresh page
                 bootstrap.Modal.getInstance(document.getElementById('hodModal')).hide();
                 window.location.reload();

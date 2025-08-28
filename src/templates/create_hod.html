@@ -93,6 +93,11 @@
     }
 </style>
 <div class="hod-modal-card">
+    {% if error %}
+        <div style="color: #c0392b; background: #fff3f3; border: 1px solid #e57373; border-radius: 6px; padding: 10px 18px; margin: 18px 32px 0 32px; font-weight: 500;">
+            {{ error }}
+        </div>
+    {% endif %}
     <div class="section-title">Details</div>
     <div class="section-desc">Fill in the HOD details below. All fields are required.</div>
     <hr>
