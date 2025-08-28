@@ -35,6 +35,17 @@ async def delete_hod(hod_id: str = Form(...)):
     try:
         result = hod_collection.delete_one({"_id": ObjectId(hod_id)})
         print(f"[DEBUG] Delete result: deleted_count={result.deleted_count}")
+        # After deletion, update sequence_tracker to max hod_id in collection
+        if result.deleted_count == 1:
+            max_hod = hod_collection.find_one(
+                {"user_type": "hod"},
+                sort=[("hod_id", -1)]
+            )
+            new_seq = max_hod["hod_id"] if max_hod and "hod_id" in max_hod else 1000
+            hod_collection.update_one(
+                {"_id": "sequence_tracker"},
+                {"$set": {"hod_id": new_seq}}
+            )
         return {"success": result.deleted_count == 1}
     except Exception as e:
         print(f"[DEBUG] Exception during delete: {e}")
@@ -252,6 +263,22 @@ async def submit_hod(
     from bson import ObjectId
     hod_collection = get_db()
     departments_list = [d.strip() for d in departments.split(",")]
+    if len(contact_number) != 10 or not contact_number.isdigit():
+        return templates.TemplateResponse(
+            "create_hod.html",
+            {
+                "request": request,
+                "hod": {
+                    "name": name,
+                    "email": email,
+                    "contact_number": contact_number,
+                    "university_name": university_name,
+                    "departments": departments,
+                    "registration_year": registration_year
+                },
+                "error": "Contact Number must be exactly 10 digits."
+            }
+        )
     if hod_id:
         # Update existing HOD
         update_result = hod_collection.update_one(
@@ -270,7 +297,7 @@ async def submit_hod(
         # Check for duplicate email before creating
         existing = hod_collection.find_one({"email": email})
         if existing:
-            # Render the form again with error message
+            # Show a clear error message for duplicate HOD
             return templates.TemplateResponse(
                 "create_hod.html",
                 {
@@ -283,7 +310,7 @@ async def submit_hod(
                         "departments": departments,
                         "registration_year": registration_year
                     },
-                    "error": "A HOD with this email already exists."
+                    "error": "Duplicate HOD: A record with this email already exists."
                 }
             )
         # Prepare payload for create
