@@ -25,6 +25,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+
 # Register /delete-hod endpoint directly with FastAPI (not via router)
 @app.post("/delete-hod")
 async def delete_hod(hod_id: str = Form(...)):
@@ -39,29 +40,70 @@ async def delete_hod(hod_id: str = Form(...)):
         print(f"[DEBUG] Exception during delete: {e}")
         return {"success": False, "error": str(e)}
 
+# Register /delete-candidate endpoint directly with FastAPI (not via router)
+from fastapi import Body
+@app.post("/delete-candidate/")
+async def delete_candidate_root(payload: dict = Body(...)):
+    email = payload.get("email")
+    print(f"[DELETE DEBUG] Received email for deletion: {email}")
+    if not email:
+        print("[DELETE DEBUG] Missing email in payload.")
+        return {"success": False, "error": "Missing email."}
+    from db.mongodb import get_db
+    users_collection = get_db()
+    result = users_collection.delete_one({"email": email})
+    print(f"[DELETE DEBUG] Deletion result: deleted_count={result.deleted_count}")
+    return {"success": result.deleted_count == 1}
+
 
 # In-memory HOD user store for demo (replace with DB in production)
 HOD_USERS = {}
 
-# Registration Page (GET)
+# Registration Page (GET) with prefill support
 @app.get("/register", response_class=HTMLResponse)
-async def show_registration_form(request: Request):
-    return templates.TemplateResponse("registration.html", {"request": request})
+async def show_registration_form(
+    request: Request,
+    regNo: str = "",
+    email: str = "",
+    name: str = "",
+    branch: str = "",
+    semester: str = "",
+    university_name: str = "",
+    location: str = "",
+    projects: str = "",
+    # removed skills/certifications/achievements
+    edit: str = "0"
+):
+    return templates.TemplateResponse(
+        "registration.html",
+        {
+            "request": request,
+            "regNo": regNo,
+            "email": email,
+            "name": name,
+            "branch": branch,
+            "semester": semester,
+            "university_name": university_name,
+            "location": location,
+            "projects": projects,
+            "edit": edit
+        }
+    )
 
 # Password Setup Page (GET)
 
 @app.get("/setup-password", response_class=HTMLResponse)
 async def setup_password_form(request: Request, email: str = ""):
-    username = email.split("@")[0] if email else ""
-    return templates.TemplateResponse("setup_password.html", {"request": request, "username": username})
+    username = ""
+    return templates.TemplateResponse("setup_password.html", {"request": request, "username": username, "email": email})
 
 
 # Password Setup Page (POST)
 
 @app.post("/setup-password", response_class=HTMLResponse)
-async def setup_password_submit(request: Request, username: str = Form(...), password: str = Form(...), confirm_password: str = Form(...)):
+async def setup_password_submit(request: Request, username: str = Form(...), password: str = Form(...), confirm_password: str = Form(...), email: str = Form("") ):
     if password != confirm_password:
-        return templates.TemplateResponse("setup_password.html", {"request": request, "username": username, "error": "Passwords do not match."})
+        return templates.TemplateResponse("setup_password.html", {"request": request, "username": username, "email": email, "error": "Passwords do not match."})
     hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
     # Store username and hashed password in MongoDB securely
@@ -70,22 +112,25 @@ async def setup_password_submit(request: Request, username: str = Form(...), pas
     # Check if username is already taken
     existing_user = hod_collection.find_one({"username": username})
     if existing_user:
-        return templates.TemplateResponse("setup_password.html", {"request": request, "username": username, "error": "Username is already taken. Please choose another."})
+        return templates.TemplateResponse("setup_password.html", {"request": request, "username": username, "email": email, "error": "Username is already taken. Please choose another."})
 
-    # Update HOD record with username and password (find by email prefix)
+    # Update HOD record with username and password (find by email)
     result = hod_collection.update_one(
-        {"email": {"$regex": f"^{username}@"}},
+        {"email": email},
         {"$set": {"username": username, "password": hashed_pw.decode("utf-8")}},
         upsert=False
     )
+    if result.matched_count == 0:
+        return templates.TemplateResponse("setup_password.html", {"request": request, "username": username, "email": email, "error": "No HOD record found for this email. Please contact admin."})
 
     # Show confirmation and login URL at the bottom of the same page
-    login_url = "http://127.0.0.1:8000/"
+    login_url = "/login"
     return templates.TemplateResponse(
         "setup_password.html",
         {
             "request": request,
             "username": username,
+            "email": email,
             "success": True,
             "login_url": login_url
         }
@@ -120,10 +165,10 @@ app.add_middleware(
 app.include_router(hod_router)
 app.include_router(registration_router)
 print("Including candidate_management_router at root prefix for /candidate-management route")
-app.include_router(candidate_management_router, prefix="")
+app.include_router(candidate_management_router)
 
-# Show login page on root
-@app.get("/", response_class=HTMLResponse)
+    # Show login page at /login
+@app.get("/login", response_class=HTMLResponse)
 async def show_login(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
@@ -137,8 +182,8 @@ async def login(request: Request, username: str = Form(...), password: str = For
     # HOD login (validate from MongoDB)
     from db.mongodb import get_db
     hod_collection = get_db()
-    # Find HOD by username (email prefix)
-    hod_user = hod_collection.find_one({"email": {"$regex": f"^{username}@"}})
+    # Find HOD by username field
+    hod_user = hod_collection.find_one({"username": username})
     if hod_user and "password" in hod_user:
         db_hashed_pw = hod_user["password"].encode("utf-8")
         if bcrypt.checkpw(password.encode(), db_hashed_pw):
