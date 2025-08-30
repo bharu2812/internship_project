@@ -8,7 +8,7 @@ class OllamaSkillGenerator:
         self.model_name = model_name
         self.ollama_url = f"{ollama_host}/api/generate"
         self.client = pymongo.MongoClient('mongodb://localhost:27017/')
-        self.db = self.client['internship_project']
+        self.db = self.client['internship-program']
         self.collection = self.db['skills_list']
  
     def generate_skills(self, domain="CSE/IT", max_retries=3):
