@@ -29,7 +29,7 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 # Register /delete-hod endpoint directly with FastAPI (not via router)
 @app.post("/delete-hod")
 async def delete_hod(hod_id: str = Form(...)):
-    from db.mongodb import get_db
+    from src.db.mongodb import get_db
     hod_collection = get_db()
     print(f"[DEBUG] Received hod_id for delete: {hod_id}")
     try:
@@ -70,36 +70,40 @@ async def delete_candidate_root(payload: dict = Body(...)):
 # In-memory HOD user store for demo (replace with DB in production)
 HOD_USERS = {}
 
-# Registration Page (GET) with prefill support
-@app.get("/register", response_class=HTMLResponse)
-async def show_registration_form(
-    request: Request,
-    regNo: str = "",
-    email: str = "",
-    name: str = "",
-    branch: str = "",
-    semester: str = "",
-    university_name: str = "",
-    location: str = "",
-    projects: str = "",
-    # removed skills/certifications/achievements
-    edit: str = "0"
-):
-    return templates.TemplateResponse(
-        "registration.html",
-        {
-            "request": request,
-            "regNo": regNo,
-            "email": email,
-            "name": name,
-            "branch": branch,
-            "semester": semester,
-            "university_name": university_name,
-            "location": location,
-            "projects": projects,
-            "edit": edit
+# Registration Page (GET) with per-field readonly support
+@app.get("/register/{username}", response_class=HTMLResponse)
+async def show_registration_form(request: Request, username: str = "", edit: str = "0"):
+    # If username is provided, fetch candidate record and prefill all fields
+    candidate = None
+    if username:
+        from db.mongodb import get_db
+        users_collection = get_db()
+        candidate = users_collection.find_one({"username": username, "user_type": "candidate"})
+    # Prepare context with per-field readonly flags
+    def is_readonly(val):
+        return bool(val)
+    context = {
+        "request": request,
+        "regNo": candidate["regNo"] if candidate else "",
+        "email": candidate["email"] if candidate else "",
+        "name": candidate["name"] if candidate else "",
+        "branch": candidate["branch"] if candidate else "",
+        "semester": candidate["semester"] if candidate else "",
+    # university_name and location removed
+        "projects": candidate["projects"] if candidate and "projects" in candidate else "",
+        "edit": edit,
+        # Per-field readonly flags
+        "readonly_fields": {
+            "regNo": is_readonly(candidate["regNo"]) if candidate and "regNo" in candidate else False,
+            "email": is_readonly(candidate["email"]) if candidate and "email" in candidate else False,
+            "name": is_readonly(candidate["name"]) if candidate and "name" in candidate else False,
+            "branch": is_readonly(candidate["branch"]) if candidate and "branch" in candidate else False,
+            "semester": is_readonly(candidate["semester"]) if candidate and "semester" in candidate else False,
+            # university_name and location removed
+            "projects": is_readonly(candidate["projects"]) if candidate and "projects" in candidate else False,
         }
-    )
+    }
+    return templates.TemplateResponse("registration.html", context)
 
 # Password Setup Page (GET)
 
@@ -173,10 +177,96 @@ app.add_middleware(
 )
 
 
+
 app.include_router(hod_router)
 app.include_router(registration_router)
-print("Including candidate_management_router at root prefix for /candidate-management route")
+#print("Including candidate_management_router at root prefix for /candidate-management route")
 app.include_router(candidate_management_router)
+
+# Add/Edit Candidate Modal Page (for HOD/admin)
+@app.get("/candidate-management/{username}/add-edit-modal", response_class=HTMLResponse)
+async def show_add_edit_candidate_modal(request: Request, candidate_id: str = None):
+    candidate = None
+    if candidate_id:
+        from db.mongodb import get_db
+        users_collection = get_db()
+        from bson import ObjectId
+        c = users_collection.find_one({"_id": ObjectId(candidate_id)})
+        if c:
+            c["_id"] = str(c["_id"])
+            candidate = c
+    return templates.TemplateResponse("add_edit_candidate.html", {"request": request, "candidate": candidate})
+
+# Add Candidate (POST)
+@app.post("/candidate-management/{username}/add-candidate")
+async def add_candidate(
+    regNo: str = Form(...),
+    name: str = Form(...),
+    email: str = Form(...),
+    branch: str = Form(""),
+    semester: str = Form(""),
+    # university_name and location removed
+    projects: str = Form(""),
+    skills: str = Form(""),
+    achievements: str = Form(""),
+    certifications: str = Form("")
+):
+    from db.mongodb import get_db
+    users_collection = get_db()
+    # Check for duplicate email or regNo
+    duplicate = users_collection.find_one({"$or": [{"email": email}, {"regNo": regNo}]})
+    if duplicate:
+        return JSONResponse({"success": False, "error": "Duplicate email or registration number."}, status_code=400)
+    doc = {
+        "regNo": regNo,
+        "name": name,
+        "email": email,
+        "branch": branch,
+        "semester": semester,
+    # university_name and location removed
+        "projects": projects,
+        "skills": skills,
+        "achievements": achievements,
+        "certifications": certifications,
+        "user_type": "candidate"
+    }
+    users_collection.insert_one(doc)
+    return {"success": True}
+
+# Edit Candidate (POST)
+@app.post("/candidate-management/{username}/edit-candidate")
+async def edit_candidate(
+    candidate_id: str = Form(...),
+    regNo: str = Form(...),
+    name: str = Form(...),
+    email: str = Form(...),
+    branch: str = Form(""),
+    semester: str = Form(""),
+    # university_name and location removed
+    projects: str = Form(""),
+    skills: str = Form(""),
+    achievements: str = Form(""),
+    certifications: str = Form("")
+):
+    from db.mongodb import get_db
+    users_collection = get_db()
+    from bson import ObjectId
+    # Do not allow email to be changed
+    update_fields = {
+        "regNo": regNo,
+        "name": name,
+        "branch": branch,
+        "semester": semester,
+    # university_name and location removed
+        "projects": projects,
+        "skills": skills,
+        "achievements": achievements,
+        "certifications": certifications
+    }
+    result = users_collection.update_one({"_id": ObjectId(candidate_id)}, {"$set": update_fields})
+    if result.matched_count == 1:
+        return {"success": True}
+    return JSONResponse({"success": False, "error": "Candidate not found."}, status_code=404)
 
     # Show login page at /login
 @app.get("/login", response_class=HTMLResponse)
@@ -190,15 +280,18 @@ async def login(request: Request, username: str = Form(...), password: str = For
     if username == PORTAL_USERNAME and bcrypt.checkpw(password.encode(), PORTAL_HASHED_PASSWORD):
         return RedirectResponse(url="/dashboard", status_code=303)
 
-    # HOD login (validate from MongoDB)
+    # HOD or Candidate login (validate from MongoDB)
     from db.mongodb import get_db
-    hod_collection = get_db()
-    # Find HOD by username field
-    hod_user = hod_collection.find_one({"username": username})
-    if hod_user and "password" in hod_user:
-        db_hashed_pw = hod_user["password"].encode("utf-8")
+    user_collection = get_db()
+    # Find user by username field
+    user = user_collection.find_one({"username": username})
+    if user and "password" in user:
+        db_hashed_pw = user["password"].encode("utf-8")
         if bcrypt.checkpw(password.encode(), db_hashed_pw):
-            return RedirectResponse(url="/candidate-management", status_code=303)
+            if user.get("user_type") == "hod":
+                return RedirectResponse(url=f"/candidate-management/{username}", status_code=303)
+            elif user.get("user_type") == "candidate":
+                return RedirectResponse(url=f"/register/{username}", status_code=303)
 
     return templates.TemplateResponse(
         "login.html",

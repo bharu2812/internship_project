@@ -48,16 +48,16 @@ router = APIRouter(prefix="", tags=["candidate_management"])
 async def get_candidates():
     from db.mongodb import get_db
     users_collection = get_db()
-    candidates = list(users_collection.find({}, {"_id": 0}))
+    candidates = list(users_collection.find({"user_type": "candidate"}, {"_id": 0}))
     return {"candidates": candidates}
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(os.path.dirname(BASE_DIR), "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-@router.get("/candidate-management", response_class=HTMLResponse)
-async def candidate_management(request: Request):
-    return templates.TemplateResponse("candidate_management.html", {"request": request})
+@router.get("/candidate-management/{username}", response_class=HTMLResponse)
+async def candidate_management(request: Request, username: str):
+    return templates.TemplateResponse("candidate_management.html", {"request": request, "username": username})
 
 # CSV upload endpoint for HOD to import students and send password setup emails
 @router.post("/upload-csv/")
@@ -85,7 +85,8 @@ async def upload_csv(file: UploadFile = File(...)):
                     "name": name,
                     "branch": branch,
                     "semester": semester,
-                    "email_sent": False
+                    "email_sent": False,
+                    "user_type": "candidate"
                 })
     from db.mongodb import get_db
     users_collection = get_db()
@@ -164,6 +165,7 @@ async def add_candidate(candidate: dict = Body(...)):
     if duplicate:
         print("Duplicate candidate found.")
         return {"success": False, "error": "Duplicate candidate (email or registration number already exists)."}
+    candidate["user_type"] = "candidate"
     users_collection.insert_one(candidate)
     print("Candidate inserted successfully.")
     return {"success": True}
