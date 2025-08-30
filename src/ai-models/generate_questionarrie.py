@@ -10,7 +10,7 @@ class OllamaQuestionGenerator:
 
         # Connect to MongoDB
         self.client = pymongo.MongoClient('mongodb://localhost:27017/')
-        self.db = self.client['question_bank_db']
+        self.db = self.client['internship-program']
         self.collection = self.db['generated_questions']
         
         # Create indexes
@@ -148,7 +148,7 @@ def main():
         print(f"\nGenerating MCQs for {domain}...")
         for difficulty in difficulties:
             for topic in topics:
-                for i in range(5):
+                for i in range(3):
                     print(f"  Generating {difficulty} MCQ {mcq_id} for topic: {topic}")
                     mcq = generator.generate_mcq(domain, difficulty, topic)
                     if mcq:
