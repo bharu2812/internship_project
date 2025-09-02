@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, Request, Form, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -24,6 +23,17 @@ app = FastAPI()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/login")
+
+
+# Simple logout route (placeholder – add session/cookie clearing when auth is implemented)
+@app.get("/logout", include_in_schema=False)
+def logout():
+    return RedirectResponse(url="/login", status_code=303)
 
 
 # Register /delete-hod endpoint directly with FastAPI (not via router)
