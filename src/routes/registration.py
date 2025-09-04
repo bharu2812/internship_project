@@ -1,4 +1,20 @@
 from fastapi import APIRouter, Form, Request
+"""
+MongoDB Collections Overview:
+
+- candidate_tests:
+    Stores test metadata and the set of questions assigned to each candidate.
+    Tracks the test status (e.g., "submitted") and ensures each candidate only takes the test once.
+    Used for test setup, assigned questions, and status tracking.
+
+- candidate_submissions:
+    Stores the actual answers submitted by the candidate when they complete the test.
+    Records which answers were chosen, how many were submitted, and the submission timestamp.
+    Used for candidate's submitted answers and submission details.
+
+This separation allows test assignment and answer submission data to be managed independently, making it easier to maintain test integrity and analyze candidate responses.
+"""
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from db.mongodb import get_db, get_db_connection
 from models.candidate import Candidate
