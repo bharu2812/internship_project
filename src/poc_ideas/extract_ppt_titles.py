@@ -123,7 +123,7 @@ class OllamaPPTAnalyzer:
 
         try:
             print(f"  [TEST] Testing Ollama with simple prompt...")
-            test_response = requests.post(self.ollama_url, json=test_payload, timeout=10)
+            test_response = requests.post(self.ollama_url, json=test_payload, timeout=120)
             test_response.raise_for_status()
             print(f"  [TEST] ✅ Ollama is working")
         except Exception as e:
@@ -133,7 +133,7 @@ class OllamaPPTAnalyzer:
         for attempt in range(1, max_retries + 1):
             try:
                 print(f"  [OLLAMA] Sending to Ollama (attempt {attempt})...")
-                response = requests.post(self.ollama_url, json=payload, timeout=30)  # Changed from 120
+                response = requests.post(self.ollama_url, json=payload, timeout=120)  # Changed from 120
                 response.raise_for_status()
                 
                 result = response.json()
@@ -183,8 +183,8 @@ def main():
     print("[INFO] Starting PPT Analysis with Ollama")
     print("="*60)
     
-    zip_path = r'd:\poc\internship_project\src\poc_ideas.zip'
-    extract_dir = r'd:\poc\internship_project\src\poc_ideas_unzipped'
+    zip_path = r'd:\WorkSpace-Lenovo\projects\POC\internship_project\src\poc_ideas.zip'
+    extract_dir = r'd:\WorkSpace-Lenovo\projects\POC\internship_project\src\poc_ideas_unzipped'
     
     if not os.path.exists(extract_dir):
         os.makedirs(extract_dir)
