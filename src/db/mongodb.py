@@ -16,3 +16,15 @@ def get_all_generated_questions():
     collection = db["generated_questions"]
     return list(collection.find())
 
+# ...existing code...
+
+def save_titles_to_mongodb(titles):
+    db = get_db_connection()
+    collection = db["ppt_titles"]
+    # Optionally clear previous titles
+    collection.delete_many({})
+    # Insert each title as a document
+    docs = [{"title": t} for t in titles]
+    collection.insert_many(docs)
+    return len(docs)
+# ...existing code...
