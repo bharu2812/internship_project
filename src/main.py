@@ -89,16 +89,6 @@ async def show_registration_form(request: Request, username: str = "", edit: str
         from db.mongodb import get_db
         users_collection = get_db()
         candidate = users_collection.find_one({"username": username, "user_type": "candidate"})
-        # If candidate already fully registered (has university reg number or test doc) -> redirect to portal tile
-        if candidate:
-            regno = candidate.get("university_registration_number") or candidate.get("regNo")
-            if regno:
-                # Check if test already generated to avoid unnecessary form re-display
-                from db.mongodb import get_db_connection
-                db = get_db_connection()
-                if db["candidate_tests"].find_one({"student_regno": regno}) or candidate.get("skills"):
-                    from fastapi.responses import RedirectResponse
-                    return RedirectResponse(url=f"/candidate-portal?regno={regno}&name={candidate.get('name','')}", status_code=303)
     # Prepare context with per-field readonly flags
     def is_readonly(val):
         return bool(val)
@@ -311,10 +301,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
             if user.get("user_type") == "hod":
                 return RedirectResponse(url=f"/candidate-management/{username}", status_code=303)
             elif user.get("user_type") == "candidate":
-                # If candidate already registered, send straight to portal tile page
-                regno = user.get("university_registration_number") or user.get("regNo") or ""
-                target = f"/candidate-portal?regno={regno}&name={user.get('name','')}" if regno else f"/register/{username}"
-                return RedirectResponse(url=target, status_code=303)
+                return RedirectResponse(url=f"/register/{username}", status_code=303)
 
     return templates.TemplateResponse(
         "login.html",
