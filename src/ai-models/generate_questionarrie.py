@@ -123,46 +123,60 @@ class OllamaQuestionGenerator:
 
 
 def main():
-    # Domains and topics for MCQ generation
-    domains_topics = {
-        "Programming Fundamentals": ["OOP", "Data Types", "Control Structures", "Functions", "Memory Management"],
-        "Data Structures & Algorithms": ["Arrays", "Linked Lists", "Trees", "Graphs", "Sorting", "Searching"],
-        "Database Management": ["SQL", "NoSQL", "Normalization", "Indexing", "Transactions"],
-        "Web Development": ["Frontend", "Backend", "APIs", "Security", "Performance"],
-        "System Design": ["Scalability", "Load Balancing", "Caching", "Microservices"]
-    }
+    # Read skills and category from all_skills collection in MongoDB
+    import pymongo
+    client = pymongo.MongoClient('mongodb://localhost:27017/')
+    db = client['internship-program']
+    skills_collection = db['all_skills']
+    skills_docs = list(skills_collection.find({}))
 
     generator = OllamaQuestionGenerator(
         ollama_host="http://localhost:11434",
         model_name="llama2"
     )
 
-    print("[INFO] Starting MCQ generation with Ollama...")
-    print("[INFO] Make sure Ollama is running with: ollama serve")
+    print("[INFO] Starting MCQ generation for all skills and categories from all_skills collection...")
     print(f"[INFO] Using model: {generator.model_name}")
+
+    import time
+    start_time = time.time()
 
     mcq_id = 1
     total_mcqs = 0
     difficulties = ["Beginner", "Intermediate", "Advanced"]
-    for domain, topics in domains_topics.items():
-        print(f"\nGenerating MCQs for {domain}...")
-        for difficulty in difficulties:
-            for topic in topics:
-                for i in range(3):
-                    print(f"  Generating {difficulty} MCQ {mcq_id} for topic: {topic}")
-                    mcq = generator.generate_mcq(domain, difficulty, topic)
+    min_questions = 10
+    for doc in skills_docs:
+        category = doc.get('category', 'Unknown')
+        skills = doc.get('skills', [])
+        for skill in skills:
+            print(f"\nGenerating MCQs for skill: {skill} (Category: {category})")
+            for difficulty in difficulties:
+                generated_count = 0
+                attempts = 0
+                while generated_count < min_questions and attempts < min_questions * 2:
+                    print(f"  Generating {difficulty} MCQ {mcq_id} for skill: {skill}")
+                    mcq = generator.generate_mcq(skill, difficulty)
                     if mcq:
                         mcq['question_id'] = mcq_id
+                        mcq['category'] = category
                         saved = generator.save_to_mongodb([mcq])
                         if saved:
                             print(f"    Saved MCQ {mcq_id} to MongoDB.")
                             total_mcqs += 1
+                            generated_count += 1
                         else:
                             print(f"    Failed to save MCQ {mcq_id} to MongoDB.")
                         mcq_id += 1
                     else:
                         print(f"    Failed to generate MCQ {mcq_id}")
+                    attempts += 1
+                if generated_count < min_questions:
+                    print(f"    Only {generated_count} MCQs generated for skill '{skill}' at difficulty '{difficulty}'.")
+
+    end_time = time.time()
+    elapsed = end_time - start_time
     print(f"\n[INFO] Total MCQs saved: {total_mcqs}")
+    print(f"[INFO] Time taken to generate all questions: {elapsed:.2f} seconds")
     print("[INFO] Database stats:", generator.get_database_stats())
 
 if __name__ == "__main__":
