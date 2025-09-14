@@ -22,6 +22,8 @@ from pymongo import ReturnDocument
 from vector_db.qdrant import search_questions
 import random
 from datetime import datetime
+from typing import List, Optional
+import json
 
 router = APIRouter()
 
@@ -72,7 +74,7 @@ async def candidate_portal(regno: str, name: str = ""):
     users = get_db()
     submissions = db["candidate_submissions"]
     tests = db["candidate_tests"]
-    existing = users.find_one({"university_registration_number": regno})
+    existing = users.find_one({"regNo": regno})
     if not existing:
         return HTMLResponse("<h2>Candidate not found. Please register.</h2>", status_code=404)
     candidate_id = existing.get("candidate_id")
@@ -107,13 +109,41 @@ async def register_user(
         name: str = Form(...),
         semester: str = Form(...),
         branch: str = Form(...),
-        skills: List[str] = Form(...),
+        skills: Optional[str] = Form(None),
+        projects: Optional[str] = Form(None),
+        achievements: Optional[str] = Form(None),
+        certifications: Optional[str] = Form(None),
+        email: Optional[str] = Form(None)
 ):
+    users = get_db()  # This is your user collection
+    skills_list = json.loads(skills) if skills else []
+    projects_list = json.loads(projects) if projects else []
+
+    update_fields = {
+        "name": name,
+        "semester": semester,
+        "branch": branch,
+        "skills": skills_list,
+        "projects": projects_list,
+        "achievements": achievements,
+        "certifications": certifications,
+        "email": email
+    }
+
+    # Remove None values
+    update_fields = {k: v for k, v in update_fields.items() if v is not None}
+
+    # Update the user record by registration number
+    users.update_one(
+        {"regNo": university_registration_number},
+        {"$set": update_fields},
+        upsert=True  # Creates a new record if not found
+    )
+
     candidate_collection = get_db()
     test_collection = get_db_connection()["candidate_tests"]
     submissions_collection = get_db_connection()["candidate_submissions"]
-    # If candidate already exists, just show tile page (create test if missing)
-    existing = candidate_collection.find_one({"university_registration_number": university_registration_number})
+    existing = candidate_collection.find_one({"regNo": university_registration_number})
     if existing:
         candidate_id = existing.get("candidate_id")
         test_doc = test_collection.find_one({"student_regno": university_registration_number})
@@ -155,13 +185,16 @@ async def register_user(
     candidate_id = tracker["candidate_id"]
 
 
+    projects_list = json.loads(projects) if projects else []
+
     candidate = Candidate(
         university_registration_number=university_registration_number,
         name=name,
     # university_name and location removed
         semester=semester,
         branch=branch,
-        skills=skills
+        skills=skills,
+        projects=projects_list
     )
     candidate_data = candidate.dict()
     candidate_data["user_type"] = "candidate"

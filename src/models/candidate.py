@@ -6,3 +6,4 @@ class Candidate(BaseModel):
     semester: str = Field(..., min_length=1)
     branch: str = Field(..., min_length=1)
     skills: list[str] = Field(default_factory=list)
+    projects: list[dict] = Field(default_factory=list)  # Added field for projects
