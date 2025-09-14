@@ -1,0 +1,121 @@
+<style>
+    .mentor-modal-card {
+        max-width: 800px;
+        min-height: 320px;
+        margin: 0 auto;
+        background: #f8fafc;
+        padding: 0 0 0 0;
+        border-radius: 12px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+        font-family: 'Segoe UI', Arial, sans-serif;
+        border: 1.5px solid #e0e0e0;
+        overflow: visible;
+    }
+    .mentor-modal-card .section-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #222;
+        margin-bottom: 0.2rem;
+        padding: 32px 32px 0 32px;
+    }
+    .mentor-modal-card .section-desc {
+        color: #555;
+        font-size: 1.01rem;
+        margin-bottom: 1.1rem;
+        padding: 0 32px;
+    }
+    .mentor-modal-card hr {
+        margin: 0.8rem 0 1.2rem 0;
+        border: none;
+        border-top: 1.5px solid #e0e0e0;
+    }
+    .mentor-modal-card form {
+        padding: 0 32px 0 32px;
+    }
+    .mentor-modal-card label {
+        margin-top: 0.7rem;
+        font-weight: 500;
+        color: #222;
+        font-size: 1.01rem;
+    }
+    .mentor-modal-card input[type="text"],
+    .mentor-modal-card input[type="email"],
+    .mentor-modal-card input[type="password"],
+    .mentor-modal-card select {
+        width: 100%;
+        padding: 11px 14px;
+        margin-top: 4px;
+        border: 1.5px solid #e0e0e0;
+        border-radius: 7px;
+        font-size: 1.08rem;
+        background: #fff;
+        transition: border 0.2s, box-shadow 0.2s;
+        box-sizing: border-box;
+    }
+    .mentor-modal-card input:focus {
+        border: 1.5px solid #1976d2;
+        outline: none;
+        background: #fff;
+        box-shadow: 0 0 0 2px #e3eefd;
+    }
+    .mentor-modal-card .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        padding: 0 32px 1.5rem 32px;
+    }
+    .mentor-modal-card button, .mentor-modal-card .btn-cancel {
+        min-width: 110px;
+        padding: 10px 0;
+        border-radius: 7px;
+        font-size: 1.08rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        border: none;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s;
+    }
+    .mentor-modal-card button[type="submit"] {
+        background: #1976d2;
+        color: #fff;
+    }
+    .mentor-modal-card button[type="submit"]:hover {
+        background: #125ea2;
+    }
+    .mentor-modal-card .btn-cancel {
+        background: #fff;
+        color: #333;
+        border: 1.5px solid #e0e0e0;
+    }
+    .mentor-modal-card .btn-cancel:hover {
+        background: #f3f3f3;
+    }
+</style>
+<div class="mentor-modal-card">
+    {% if error %}
+        <div style="color: #c0392b; background: #fff3f3; border: 1px solid #e57373; border-radius: 6px; padding: 10px 18px; margin: 18px 32px 0 32px; font-weight: 500;">
+            {{ error }}
+        </div>
+    {% endif %}
+    <div class="section-title">Mentor Details</div>
+    <div class="section-desc">Fill in the mentor details below. All fields are required.</div>
+    <hr>
+    <form method="post" action="/submit-mentor">
+        {% if mentor %}
+            <input type="hidden" name="mentor_id" value="{{ mentor._id }}">
+        {% endif %}
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required value="{{ mentor.name if mentor else '' }}">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required value="{{ mentor.email if mentor else '' }}">
+        <label for="contact_number">Contact Number (Give in 10 digits)</label>
+        <input type="text" id="contact_number" name="contact_number" required value="{{ mentor.contact_number if mentor else '' }}">
+        <label for="location">Location</label>
+        <input type="text" id="location" name="location" required value="{{ mentor.location if mentor else '' }}">
+        <div class="form-actions">
+            <button type="button" class="btn-cancel" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit">{{ 'Save' if mentor else 'Submit' }}</button>
+        </div>
+    </form>
+</div>

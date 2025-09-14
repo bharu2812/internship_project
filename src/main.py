@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Request, Form, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 import os
 from fastapi.security import HTTPBasicCredentials
 from routes.hod import router as hod_router, PORTAL_USERNAME, PORTAL_HASHED_PASSWORD, authenticate
+from routes.mentor import router as mentor_router
 from routes.registration import router as registration_router
 from routes.candidate_management import router as candidate_management_router
 import bcrypt
@@ -22,7 +24,11 @@ from bson import ObjectId
 app = FastAPI()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", include_in_schema=False)
@@ -39,7 +45,7 @@ def logout():
 # Register /delete-hod endpoint directly with FastAPI (not via router)
 @app.post("/delete-hod")
 async def delete_hod(hod_id: str = Form(...)):
-    from src.db.mongodb import get_db
+    from db.mongodb import get_db
     hod_collection = get_db()
     print(f"[DEBUG] Received hod_id for delete: {hod_id}")
     try:
@@ -55,6 +61,31 @@ async def delete_hod(hod_id: str = Form(...)):
             hod_collection.update_one(
                 {"_id": "sequence_tracker"},
                 {"$set": {"hod_id": new_seq}}
+            )
+        return {"success": result.deleted_count == 1}
+    except Exception as e:
+        print(f"[DEBUG] Exception during delete: {e}")
+        return {"success": False, "error": str(e)}
+
+# Register /delete-mentor endpoint directly with FastAPI (not via router)
+@app.post("/delete-mentor")
+async def delete_mentor(mentor_id: str = Form(...)):
+    from db.mongodb import get_db
+    mentor_collection = get_db()
+    print(f"[DEBUG] Received mentor_id for delete: {mentor_id}")
+    try:
+        result = mentor_collection.delete_one({"_id": ObjectId(mentor_id)})
+        print(f"[DEBUG] Delete result: deleted_count={result.deleted_count}")
+        # After deletion, update sequence_tracker to max mentor_id in collection
+        if result.deleted_count == 1:
+            max_mentor = mentor_collection.find_one(
+                {"user_type": "mentor"},
+                sort=[("mentor_id", -1)]
+            )
+            new_seq = max_mentor["mentor_id"] if max_mentor and "mentor_id" in max_mentor else 2000
+            mentor_collection.update_one(
+                {"_id": "mentor_sequence_tracker"},
+                {"$set": {"mentor_id": new_seq}}
             )
         return {"success": result.deleted_count == 1}
     except Exception as e:
@@ -189,6 +220,7 @@ app.add_middleware(
 
 
 app.include_router(hod_router)
+app.include_router(mentor_router)
 app.include_router(registration_router)
 #print("Including candidate_management_router at root prefix for /candidate-management route")
 app.include_router(candidate_management_router)
@@ -283,6 +315,31 @@ async def edit_candidate(
 async def show_login(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
+# Mentor welcome page
+@app.get("/mentor-welcome/{username}", response_class=HTMLResponse)
+async def show_mentor_welcome(request: Request, username: str):
+    from datetime import datetime
+    from db.mongodb import get_db
+    
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Get user and update last_login timestamp
+    user_collection = get_db()
+    user = user_collection.find_one({"username": username, "user_type": "mentor"})
+    
+    # Update last_login timestamp
+    if user:
+        user_collection.update_one(
+            {"username": username, "user_type": "mentor"},
+            {"$set": {"last_login": datetime.now()}}
+        )
+    
+    return templates.TemplateResponse("mentor_welcome.html", {
+        "request": request, 
+        "username": username,
+        "current_time": current_time
+    })
+
 # Handle login form POST (for both Portal Owner and HOD)
 @app.post("/login", response_class=HTMLResponse)
 async def login(request: Request, username: str = Form(...), password: str = Form(...)):
@@ -298,8 +355,11 @@ async def login(request: Request, username: str = Form(...), password: str = For
     if user and "password" in user:
         db_hashed_pw = user["password"].encode("utf-8")
         if bcrypt.checkpw(password.encode(), db_hashed_pw):
+            print(user.get("user_type"))
             if user.get("user_type") == "hod":
                 return RedirectResponse(url=f"/candidate-management/{username}", status_code=303)
+            elif user.get("user_type") == "mentor":
+                return RedirectResponse(url=f"/mentor-welcome/{username}", status_code=303)
             elif user.get("user_type") == "candidate":
                 return RedirectResponse(url=f"/register/{username}", status_code=303)
 
@@ -316,16 +376,19 @@ async def login(request: Request, username: str = Form(...), password: str = For
 async def show_main_portal(request: Request):
     return templates.TemplateResponse("main.html", {"request": request})
 
-# Dashboard for Portal Owner (shows HOD table)
+# Dashboard for Portal Owner (shows HOD and Mentor tables)
 @app.get("/dashboard", response_class=HTMLResponse)
 async def show_dashboard(request: Request):
     from db.mongodb import get_db
-    hod_collection = get_db()
-    hods = list(hod_collection.find({"user_type": "hod"}))
+    collection = get_db()
+    hods = list(collection.find({"user_type": "hod"}))
+    mentors = list(collection.find({"user_type": "mentor"}))
     # Convert ObjectId to string for Jinja
     for hod in hods:
         hod["_id"] = str(hod["_id"])
-    return templates.TemplateResponse("dashboard.html", {"request": request, "hods": hods})
+    for mentor in mentors:
+        mentor["_id"] = str(mentor["_id"])
+    return templates.TemplateResponse("dashboard.html", {"request": request, "hods": hods, "mentors": mentors})
 
 # Show create HOD form after login
 @app.get("/create-hod-form", response_class=HTMLResponse)
@@ -458,6 +521,150 @@ async def submit_hod(
                     <div class="error-title">Error Creating HOD</div>
                     <div class="error-msg">{response.text}</div>
                     <form action="/create-hod-form" method="get">
+                        <button class="back-btn" type="submit">Back to Form</button>
+                    </form>
+                </div>
+            </body>
+            </html>
+            """)
+
+# Show create Mentor form
+@app.get("/create-mentor-form", response_class=HTMLResponse)
+async def show_create_mentor_form(request: Request, mentor_id: str = None):
+    mentor_data = None
+    if mentor_id:
+        from db.mongodb import get_db
+        mentor_collection = get_db()
+        from bson import ObjectId
+        mentor = mentor_collection.find_one({"_id": ObjectId(mentor_id)})
+        if mentor:
+            mentor_data = {
+                "_id": str(mentor["_id"]),
+                "name": mentor.get("name", ""),
+                "email": mentor.get("email", ""),
+                "contact_number": mentor.get("contact_number", ""),
+                "location": mentor.get("location", "")
+            }
+    return templates.TemplateResponse("create_mentor.html", {"request": request, "mentor": mentor_data})
+
+# Handle Mentor form submission and call API
+@app.post("/submit-mentor")
+async def submit_mentor(
+    request: Request,
+    name: str = Form(...),
+    email: str = Form(...),
+    contact_number: str = Form(...),
+    location: str = Form(...),
+    mentor_id: str = Form(None)
+):
+    # Validate input
+    if not name.strip():
+        mentor_data = {
+            "name": name,
+            "email": email,
+            "contact_number": contact_number,
+            "location": location
+        }
+        if mentor_id:
+            mentor_data["_id"] = mentor_id
+        return templates.TemplateResponse(
+            "create_mentor.html",
+            {
+                "request": request,
+                "mentor": mentor_data,
+                "error": "Name is required."
+            }
+        )
+    
+    if mentor_id:
+        # Update existing mentor
+        from db.mongodb import get_db
+        mentor_collection = get_db()
+        from bson import ObjectId
+        update_data = {
+            "name": name.strip(),
+            "email": email,
+            "contact_number": contact_number,
+            "location": location.strip()
+        }
+        result = mentor_collection.update_one(
+            {"_id": ObjectId(mentor_id)},
+            {"$set": update_data}
+        )
+        if result.matched_count == 0:
+            return templates.TemplateResponse(
+                "create_mentor.html",
+                {
+                    "request": request,
+                    "mentor": {
+                        "name": name,
+                        "email": email,
+                        "contact_number": contact_number,
+                        "location": location
+                    },
+                    "error": "Mentor not found."
+                }
+            )
+        return RedirectResponse(url="/dashboard", status_code=303)
+    else:
+        # Check for duplicate email in database before making API call
+        from db.mongodb import get_db
+        mentor_collection = get_db()
+        existing = mentor_collection.find_one({"email": email, "user_type": "mentor"})
+        if existing:
+            return templates.TemplateResponse(
+                "create_mentor.html",
+                {
+                    "request": request,
+                    "mentor": {
+                        "name": name,
+                        "email": email,
+                        "contact_number": contact_number,
+                        "location": location
+                    },
+                    "error": "Duplicate Mentor: A record with this email already exists."
+                }
+            )
+        # Prepare payload for create
+        payload = {
+            "name": name.strip(),
+            "email": email,
+            "contact_number": contact_number,
+            "location": location.strip()
+        }
+        # Call create_mentor API
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://127.0.0.1:8000/api/create-mentor",
+                json=payload,
+                auth=(PORTAL_USERNAME, "secret123")
+            )
+        if response.status_code == 200:
+            return RedirectResponse(url="/dashboard", status_code=303)
+        return HTMLResponse(f"""
+            <html>
+            <head>
+                <title>Error</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; background: #f4f6fa; }}
+                    .error-container {{ max-width: 400px; margin: 80px auto; background: #fff; padding: 32px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; }}
+                    .error-title {{ color: #c0392b; font-size: 24px; margin-bottom: 16px; }}
+                    .error-msg {{ color: #4a5a6a; font-size: 18px; margin-bottom: 24px; }}
+                    .back-btn {{ background: #2d3e50; color: #fff; border: none; border-radius: 4px; padding: 10px 24px; font-size: 16px; cursor: pointer; margin-top: 16px; }}
+                    .back-btn:hover {{ background: #1a2533; }}
+                </style>
+            </head>
+            <body>
+                <div class="error-container">
+                    <div style="text-align:center; margin-bottom: 24px;">
+                        <a href="https://www.lenovo.com/in/en/?Redirect=False" target="_blank">
+                            <img src="https://logos-world.net/wp-content/uploads/2022/07/Lenovo-Logo.png" alt="Lenovo Logo" style="height:100px;">
+                        </a>
+                    </div>
+                    <div class="error-title">Error Creating Mentor</div>
+                    <div class="error-msg">{response.text}</div>
+                    <form action="/create-mentor-form" method="get">
                         <button class="back-btn" type="submit">Back to Form</button>
                     </form>
                 </div>

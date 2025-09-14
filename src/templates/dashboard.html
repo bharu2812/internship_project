@@ -75,106 +75,45 @@
             <span>Mentors</span>
             <div class="d-flex align-items-center" style="gap: 10px;">
                 <input id="mentor-search" type="text" class="form-control form-control-sm" placeholder="Search Mentors..." style="width: 210px; min-width: 0;">
-                <button class="btn btn-secondary btn-sm" disabled>+</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="openMentorModal(); return false;">+</button>
             </div>
         </div>
         <div class="card-body p-0">
-            <table class="table mb-0 table-hover dashboard-table">
+            <table id="mentor-table" class="table mb-0 table-hover dashboard-table">
                 <thead>
                 <tr>
-                    <th>Name</th>
-                    <th class="text-end">Email</th>
-                    <th class="text-end">Contact Number</th>
-                    <th>Location</th>
+                    <th onclick="sortTable('mentor-table', 0)" style="cursor:pointer;">Name</th>
+                    <th onclick="sortTable('mentor-table', 1)" style="cursor:pointer;">Email</th>
+                    <th onclick="sortTable('mentor-table', 2)" style="cursor:pointer;">Contact Number</th>
+                    <th onclick="sortTable('mentor-table', 3)" style="cursor:pointer;">Location</th>
                     <th class="text-center">Actions</th>
                 </tr>
                 </thead>
                 <tbody>
-                <!-- Mentor records placeholder -->
+                <!-- Mentor records will be rendered here -->
+                {% for mentor in mentors %}
+                <tr style="cursor:pointer;" onclick="viewMentorDetails('{{ mentor._id }}')">
+                    <td>
+                        {{ mentor.name }}
+                        {% if mentor.mail_sent %}
+                            <span title="Mail sent" style="color:green;font-size:1em;vertical-align:middle;">&#9993;</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ mentor.email }}</td>
+                    <td>{{ mentor.contact_number }}</td>
+                    <td>{{ mentor.location }}</td>
+                    <td class="text-center">
+                        <a href="#" title="Edit Mentor" style="margin-left:10px;text-decoration:none;" onclick="event.stopPropagation(); openMentorModal('{{ mentor._id }}'); return false;">
+                            <span style="color:#ffc107;font-size:1.3em;vertical-align:middle;" title="Edit Mentor">&#9998;</span>
+                        </a>
+                        <a href="#" title="Delete Mentor" style="margin-left:10px;text-decoration:none;" onclick="event.stopPropagation(); deleteMentor('{{ mentor._id }}'); return false;">
+                            <span style="color:#dc3545;font-size:1.3em;vertical-align:middle;" title="Delete Mentor">&#128465;</span>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
                 <tr id="mentor-no-results" style="display:none;">
                     <td colspan="5" class="text-center text-muted">No results found</td>
-                </tr>
-                </tbody>
-</script>
-<script>
-// Mentor and HOD table search filter with 'No results found' row
-document.addEventListener('DOMContentLoaded', function() {
-    // Mentor table
-    const mentorSearchInput = document.getElementById('mentor-search');
-    if (mentorSearchInput) {
-        mentorSearchInput.addEventListener('input', function() {
-            const filter = mentorSearchInput.value.trim().toLowerCase();
-            const tables = document.querySelectorAll('.dashboard-table');
-            const table = tables.length > 1 ? tables[1] : null;
-            if (!table) return;
-            const rows = Array.from(table.tBodies[0].querySelectorAll('tr'));
-            let visibleCount = 0;
-            rows.forEach(row => {
-                if (row.id === 'mentor-no-results') return;
-                const tds = row.querySelectorAll('td');
-                if (!tds.length) return;
-                const text = [0,1,2,3].map(i => tds[i]?.innerText.toLowerCase() || '').join(' ');
-                const match = filter === '' || text.includes(filter);
-                row.style.display = match ? '' : 'none';
-                if (match) visibleCount++;
-            });
-            const noResultsRow = document.getElementById('mentor-no-results');
-            if (noResultsRow) noResultsRow.style.display = visibleCount === 0 ? '' : 'none';
-        });
-    }
-    // HOD table
-    const hodSearchInput = document.getElementById('hod-search');
-    if (hodSearchInput) {
-        hodSearchInput.addEventListener('input', function() {
-            const filter = hodSearchInput.value.trim().toLowerCase();
-            const table = document.getElementById('hod-table');
-            if (!table) return;
-            const rows = Array.from(table.tBodies[0].querySelectorAll('tr'));
-            let visibleCount = 0;
-            rows.forEach(row => {
-                if (row.id === 'hod-no-results') return;
-                const tds = row.querySelectorAll('td');
-                if (!tds.length) return;
-                const text = Array.from(tds).slice(0, 7).map(td => td.innerText.toLowerCase()).join(' ');
-                const match = filter === '' || text.includes(filter);
-                row.style.display = match ? '' : 'none';
-                if (match) visibleCount++;
-            });
-            const noResultsRow = document.getElementById('hod-no-results');
-            if (noResultsRow) noResultsRow.style.display = visibleCount === 0 ? '' : 'none';
-        });
-    }
-});
-// Simple client-side table sort for HOD table
-let hodSortDirections = Array(7).fill(true); // true = asc, false = desc
-function sortTable(tableId, colIdx) {
-    const table = document.getElementById(tableId);
-    const tbody = table.tBodies[0];
-    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => row.querySelector('td'));
-    const isAsc = hodSortDirections[colIdx];
-    rows.sort((a, b) => {
-        let aText = a.children[colIdx].innerText.trim();
-        let bText = b.children[colIdx].innerText.trim();
-        // Try to compare as numbers if possible
-        let aNum = parseFloat(aText.replace(/[^\d.\-]/g, ''));
-        let bNum = parseFloat(bText.replace(/[^\d.\-]/g, ''));
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-            return isAsc ? aNum - bNum : bNum - aNum;
-        }
-        return isAsc ? aText.localeCompare(bText) : bText.localeCompare(aText);
-    });
-    rows.forEach(row => tbody.appendChild(row));
-    hodSortDirections[colIdx] = !isAsc;
-}
-</script>
-                
-                <!-- Mentor records placeholder -->
-                <tr>
-                    <td class="text-center" colspan="1"></td>
-                    <td class="text-end" colspan="1"></td>
-                    <td class="text-end" colspan="1"></td>
-                    <td class="text-center" colspan="1"></td>
-                    <td class="text-center" colspan="1"></td>
                 </tr>
                 </tbody>
             </table>
@@ -232,8 +171,94 @@ function sortTable(tableId, colIdx) {
     </div>
 </div>
 
+<!-- Mentor Modal -->
+<div class="modal fade hod-centered" id="mentorModal" tabindex="-1" aria-labelledby="mentorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mentorModalLabel">Mentor Form</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="mentorModalBody">
+                <!-- Form will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+// Mentor and HOD table search filter with 'No results found' row
+document.addEventListener('DOMContentLoaded', function() {
+    // Mentor table
+    const mentorSearchInput = document.getElementById('mentor-search');
+    if (mentorSearchInput) {
+        mentorSearchInput.addEventListener('input', function() {
+            const filter = mentorSearchInput.value.trim().toLowerCase();
+            const table = document.getElementById('mentor-table');
+            if (!table) return;
+            const rows = Array.from(table.tBodies[0].querySelectorAll('tr'));
+            let visibleCount = 0;
+            rows.forEach(row => {
+                if (row.id === 'mentor-no-results') return;
+                const tds = row.querySelectorAll('td');
+                if (!tds.length) return;
+                const text = [0,1,2,3].map(i => tds[i]?.innerText.toLowerCase() || '').join(' ');
+                const match = filter === '' || text.includes(filter);
+                row.style.display = match ? '' : 'none';
+                if (match) visibleCount++;
+            });
+            const noResultsRow = document.getElementById('mentor-no-results');
+            if (noResultsRow) noResultsRow.style.display = visibleCount === 0 ? '' : 'none';
+        });
+    }
+    // HOD table
+    const hodSearchInput = document.getElementById('hod-search');
+    if (hodSearchInput) {
+        hodSearchInput.addEventListener('input', function() {
+            const filter = hodSearchInput.value.trim().toLowerCase();
+            const table = document.getElementById('hod-table');
+            if (!table) return;
+            const rows = Array.from(table.tBodies[0].querySelectorAll('tr'));
+            let visibleCount = 0;
+            rows.forEach(row => {
+                if (row.id === 'hod-no-results') return;
+                const tds = row.querySelectorAll('td');
+                if (!tds.length) return;
+                const text = Array.from(tds).slice(0, 7).map(td => td.innerText.toLowerCase()).join(' ');
+                const match = filter === '' || text.includes(filter);
+                row.style.display = match ? '' : 'none';
+                if (match) visibleCount++;
+            });
+            const noResultsRow = document.getElementById('hod-no-results');
+            if (noResultsRow) noResultsRow.style.display = visibleCount === 0 ? '' : 'none';
+        });
+    }
+});
+// Simple client-side table sort for HOD and Mentor tables
+let hodSortDirections = Array(7).fill(true); // true = asc, false = desc
+let mentorSortDirections = Array(5).fill(true); // true = asc, false = desc
+function sortTable(tableId, colIdx) {
+    const table = document.getElementById(tableId);
+    const tbody = table.tBodies[0];
+    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => row.querySelector('td'));
+    let sortDirections = tableId === 'hod-table' ? hodSortDirections : mentorSortDirections;
+    const isAsc = sortDirections[colIdx];
+    rows.sort((a, b) => {
+        let aText = a.children[colIdx].innerText.trim();
+        let bText = b.children[colIdx].innerText.trim();
+        // Try to compare as numbers if possible
+        let aNum = parseFloat(aText.replace(/[^\d.\-]/g, ''));
+        let bNum = parseFloat(bText.replace(/[^\d.\-]/g, ''));
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return isAsc ? aNum - bNum : bNum - aNum;
+        }
+        return isAsc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+    });
+    rows.forEach(row => tbody.appendChild(row));
+    sortDirections[colIdx] = !isAsc;
+}
+
 function openHodModal(hodId) {
     let url = '/create-hod-form';
     if (hodId) url += '?hod_id=' + encodeURIComponent(hodId);
@@ -242,6 +267,18 @@ function openHodModal(hodId) {
         .then(html => {
             document.getElementById('hodModalBody').innerHTML = html;
             var myModal = new bootstrap.Modal(document.getElementById('hodModal'));
+            myModal.show();
+        });
+}
+
+function openMentorModal(mentorId) {
+    let url = '/create-mentor-form';
+    if (mentorId) url += '?mentor_id=' + encodeURIComponent(mentorId);
+    fetch(url)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('mentorModalBody').innerHTML = html;
+            var myModal = new bootstrap.Modal(document.getElementById('mentorModal'));
             myModal.show();
         });
 }
@@ -264,6 +301,27 @@ document.addEventListener('submit', function(e) {
             } else {
                 return response.text().then(html => {
                     document.getElementById('hodModalBody').innerHTML = html;
+                });
+            }
+        });
+    }
+    
+    if (e.target.closest('#mentorModalBody form')) {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        fetch(form.action, {
+            method: form.method,
+            body: formData
+        })
+        .then(response => {
+            if (response.redirected) {
+                // Close modal and refresh page
+                bootstrap.Modal.getInstance(document.getElementById('mentorModal')).hide();
+                window.location.reload();
+            } else {
+                return response.text().then(html => {
+                    document.getElementById('mentorModalBody').innerHTML = html;
                 });
             }
         });
@@ -303,6 +361,37 @@ function deleteHod(hodId) {
     .catch(() => showToast('Error deleting HOD.', 'danger'));
 }
 
+function deleteMentor(mentorId) {
+    if (!confirm('Are you sure you want to delete this Mentor?')) return;
+    fetch('/delete-mentor', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'mentor_id=' + encodeURIComponent(mentorId)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Robustly find and remove the row
+            let row = null;
+            // Try to find by delete button
+            const btn = document.querySelector(`a[onclick*="deleteMentor('${mentorId}')"]`);
+            if (btn) row = btn.closest('tr');
+            if (row) {
+                row.remove();
+                showToast('Mentor deleted successfully.', 'success');
+            } else {
+                // If not found, reload as fallback
+                window.location.reload();
+            }
+        } else {
+            showToast('Failed to delete Mentor.', 'danger');
+        }
+    })
+    .catch(() => showToast('Error deleting Mentor.', 'danger'));
+}
+
 // Simple toast message
 function showToast(message, type) {
     let toast = document.getElementById('dashboard-toast');
@@ -326,6 +415,11 @@ function showToast(message, type) {
     toast.style.color = '#fff';
     toast.style.display = 'block';
     setTimeout(() => { toast.style.display = 'none'; }, 2000);
+}
+
+function viewMentorDetails(mentorId) {
+    // Placeholder function - can be implemented later if needed
+    console.log('View mentor details:', mentorId);
 }
 </script>
 </body>

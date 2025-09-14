@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mentor Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #ffffff;  /* White background */
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+        .header-gradient {
+            width: 100%;
+            padding: 32px 0 16px 0;
+            text-align: center;
+        }
+        .main-content {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        .info-section {
+            background: #fff;
+            padding: 20px 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        .download-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            border: 2px solid #667eea;
+            padding: 8px 16px;
+            border-radius: 5px;
+            transition: all 0.3s;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .download-link:hover {
+            background: #667eea;
+            color: #fff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+        }
+        h2 {
+            text-align: left;
+            color: #2d3e50;
+            margin-bottom: 8px;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .action-icons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 18px;
+            margin-bottom: 12px;
+        }
+        .action-icons button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s;
+            position: relative;
+        }
+        .action-icons button:hover {
+            transform: scale(1.15);
+        }
+        .action-icons button span {
+            font-size: 28px;
+            color: #667eea;
+        }
+        .action-icons button[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            top: 36px;
+            right: 0;
+            background: #fff;
+            color: #667eea;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 4px 12px;
+            font-size: 0.95rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            z-index: 10;
+        }
+        .table-wrapper { 
+            position: relative; 
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
+        }
+        th, td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        th {
+            background: #f4f6fa;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            color: #2d3e50;
+            font-weight: 600;
+        }
+        tr:hover td {
+            background: #f0f4ff;
+        }
+        .dialog {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        .dialog.show { display: flex; }
+        .dialog-content {
+            background: #fff;
+            padding: 32px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            min-width: 400px;
+        }
+        .dialog-content label { 
+            display: block; 
+            margin-top: 12px; 
+            font-weight: 600;
+            color: #2d3e50;
+        }
+        .dialog-content input, .dialog-content textarea { 
+            width: 100%; 
+            padding: 8px; 
+            margin-top: 4px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            font-family: inherit;
+        }
+        .dialog-content textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .dialog-content .actions { 
+            margin-top: 24px; 
+            text-align: right; 
+        }
+        .dialog-content button { 
+            padding: 8px 20px; 
+            margin-left: 8px; 
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .dialog-content button[type="submit"] {
+            background: #667eea;
+            color: white;
+        }
+        .dialog-content button[type="button"] {
+            background: #f4f6fa;
+            color: #2d3e50;
+        }
+    </style>
+</head>
+<body>
+    <!-- Lenovo Header -->
+    <div class="header-gradient">
+        <a href="https://www.lenovo.com/in/en/?Redirect=False" target="_blank">
+            <img src="https://logos-world.net/wp-content/uploads/2022/07/Lenovo-Logo.png" alt="Lenovo Logo" style="height:100px;">
+        </a>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="info-section">
+            <ul style="font-size: 1.1rem; color: #2c3e50; line-height: 1.6;">
+                <li>
+                    Here is the downloadable template for adding POC Ideas
+                    <a href="/static/poc_idea_template.xlsx" download="poc_idea_template.xlsx" class="download-link">Download Excel Template</a>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- POC and Allocation Table -->
+        <div class="container">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <h2>POC and Allocation</h2>
+                <div class="action-icons">
+                    <button title="Import Excel" onclick="importExcel()"><span>&#128190;</span></button>
+                    <button title="Download Excel" onclick="downloadExcel()"><span>&#128462;</span></button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table id="pocTable">
+                    <thead>
+                        <tr>
+                            <th>POC Title</th>
+                            <th>Description</th>
+                            <th>Required Skills</th>
+                            <th>Difficulty Level</th>
+                            <th>Matched Students</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- POC rows will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add POC Dialog -->
+    <div class="dialog" id="addDialog">
+        <div class="dialog-content">
+            <h3>Add POC Entry</h3>
+            <form id="addForm">
+                <label for="pocTitle">POC Title</label>
+                <input type="text" id="pocTitle" name="pocTitle" required>
+                
+                <label for="description">Description</label>
+                <textarea id="description" name="description" required></textarea>
+                
+                <label for="requiredSkills">Required Skills</label>
+                <input type="text" id="requiredSkills" name="requiredSkills" required placeholder="e.g., React, Node.js, MongoDB">
+                
+                <label for="difficulty">Difficulty Level</label>
+                <select id="difficulty" name="difficulty" required style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="">Select Difficulty</option>
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                </select>
+                
+                <label for="matchedStudents">Matched Students</label>
+                <input type="text" id="matchedStudents" name="matchedStudents" placeholder="Student Registration Numbers or Names (comma separated)">
+                
+                <div class="actions">
+                    <button type="button" onclick="closeAddDialog()">Cancel</button>
+                    <button type="submit">Add POC</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hidden file input for Excel import -->
+    <input type="file" id="excelInput" accept=".xlsx,.xls" style="display:none" />
+
+    <script>
+        // POC data (will be loaded from backend)
+        let pocData = [];
+
+        // Initialize the table on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPOCDataFromBackend();
+        });
+
+        // Load POC data from backend
+        async function loadPOCDataFromBackend() {
+            try {
+                const response = await fetch('/api/pocs');
+                const data = await response.json();
+                pocData = data.pocs || [];
+                loadPOCData();
+            } catch (error) {
+                console.error('Error loading POC data:', error);
+                // Use sample data as fallback
+                pocData = [
+                    {
+                        title: "E-commerce Platform",
+                        description: "Build a complete e-commerce solution with user authentication and payment integration",
+                        requiredSkills: "React, Node.js, MongoDB, Stripe",
+                        difficulty: "Advanced"
+                    },
+                    {
+                        title: "Task Management App",
+                        description: "Create a collaborative task management application",
+                        requiredSkills: "Vue.js, Express, PostgreSQL",
+                        difficulty: "Intermediate"
+                    }
+                ];
+                loadPOCData();
+            }
+        }
+
+        function loadPOCData() {
+            const tableBody = document.getElementById('pocTable').getElementsByTagName('tbody')[0];
+            tableBody.innerHTML = '';
+            
+            pocData.forEach((poc, index) => {
+                addPOCRow(poc.title, poc.description, poc.requiredSkills, poc.difficulty, poc.matchedStudents, index);
+            });
+        }
+
+        function addPOCRow(title, description, requiredSkills, difficulty, matchedStudents, index) {
+            const tableBody = document.getElementById('pocTable').getElementsByTagName('tbody')[0];
+            const row = tableBody.insertRow();
+            
+            row.innerHTML = `
+                <td>${title}</td>
+                <td>${description.length > 50 ? description.substring(0, 50) + '...' : description}</td>
+                <td>${requiredSkills}</td>
+                <td>${difficulty}</td>
+                <td>${matchedStudents || 'Not Assigned'}</td>
+            `;
+        }
+
+        function showAddDialog() {
+            document.getElementById('addDialog').classList.add('show');
+        }
+
+        function closeAddDialog() {
+            document.getElementById('addDialog').classList.remove('show');
+            document.getElementById('addForm').reset();
+        }
+
+        function importExcel() {
+            document.getElementById('excelInput').click();
+        }
+
+        async function downloadExcel() {
+            try {
+                const response = await fetch('/api/poc/export-excel');
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'poc_ideas_export.xlsx';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    // Fallback to template download
+                    const link = document.createElement('a');
+                    link.href = '/static/poc_idea_template.xlsx';
+                    link.download = 'poc_idea_template.xlsx';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            } catch (error) {
+                console.error('Error downloading Excel:', error);
+                alert('Error downloading Excel file');
+            }
+        }
+
+        function editPOC(index) {
+            const poc = pocData[index];
+            document.getElementById('pocTitle').value = poc.title;
+            document.getElementById('description').value = poc.description;
+            document.getElementById('requiredSkills').value = poc.requiredSkills;
+            document.getElementById('difficulty').value = poc.difficulty;
+            document.getElementById('matchedStudents').value = poc.matchedStudents || '';
+            
+            // Store the index for updating
+            document.getElementById('addForm').dataset.editIndex = index;
+            showAddDialog();
+        }
+
+        async function deletePOC(index) {
+            if (confirm('Are you sure you want to delete this POC?')) {
+                try {
+                    const poc = pocData[index];
+                    if (poc._id) {
+                        const response = await fetch(`/api/poc/${poc._id}`, {
+                            method: 'DELETE'
+                        });
+                        if (response.ok) {
+                            pocData.splice(index, 1);
+                            loadPOCData();
+                        } else {
+                            alert('Error deleting POC from server');
+                        }
+                    } else {
+                        pocData.splice(index, 1);
+                        loadPOCData();
+                    }
+                } catch (error) {
+                    console.error('Error deleting POC:', error);
+                    alert('Error deleting POC');
+                }
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('addForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const pocEntry = {
+                title: formData.get('pocTitle'),
+                description: formData.get('description'),
+                requiredSkills: formData.get('requiredSkills'),
+                difficulty: formData.get('difficulty'),
+                matchedStudents: formData.get('matchedStudents')
+            };
+            
+            try {
+                const editIndex = e.target.dataset.editIndex;
+                
+                if (editIndex !== undefined) {
+                    // Update existing POC
+                    const poc = pocData[editIndex];
+                    if (poc._id) {
+                        const response = await fetch(`/api/poc/${poc._id}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(pocEntry)
+                        });
+                        if (response.ok) {
+                            pocData[editIndex] = { ...poc, ...pocEntry };
+                        } else {
+                            alert('Error updating POC on server');
+                        }
+                    } else {
+                        pocData[editIndex] = pocEntry;
+                    }
+                    delete e.target.dataset.editIndex;
+                } else {
+                    // Create new POC
+                    const response = await fetch('/api/poc', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(pocEntry)
+                    });
+                    
+                    if (response.ok) {
+                        pocData.push(pocEntry);
+                    } else {
+                        alert('Error creating POC on server');
+                        pocData.push(pocEntry); // Add locally anyway
+                    }
+                }
+                
+                loadPOCData();
+                closeAddDialog();
+                
+            } catch (error) {
+                console.error('Error saving POC:', error);
+                // Add locally if server request fails
+                pocData.push(pocEntry);
+                loadPOCData();
+                closeAddDialog();
+            }
+        });
+
+        // Handle Excel file import with real backend integration
+        document.getElementById('excelInput').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    const response = await fetch('/api/poc/import-excel', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        alert(result.message);
+                        // Reload data from backend
+                        await loadPOCDataFromBackend();
+                    } else {
+                        const error = await response.json();
+                        alert(`Error importing Excel: ${error.detail}`);
+                    }
+                } catch (error) {
+                    console.error('Error importing Excel:', error);
+                    alert('Error importing Excel file. Please check the file format.');
+                }
+            }
+            
+            // Reset file input
+            e.target.value = '';
+        });
+
+        // Close dialog when clicking outside
+        document.getElementById('addDialog').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddDialog();
+            }
+        });
+    </script>
+</body>
+</html>
