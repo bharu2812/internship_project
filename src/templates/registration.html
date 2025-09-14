@@ -5,60 +5,105 @@
     <title>Registration</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6fa; }
-        .modal-container {
-        max-width: 500px;
-        min-width: 350px;
-        margin: 40px auto;
-        border-radius: 8px;
-        background: transparent;        /*  only one white background */
-        position: relative;
-        height: auto;
-        }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6fa; }
+    .modal-container {
+    max-width: 520px;
+    min-width: 350px;
+    margin: 60px auto 80px auto;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+    padding: 38px 32px;
+    position: relative;
+    height: auto;
+    }
 
         h2 {
-            text-align: left;
-            color: #2d3e50;
-            font-size: 1.6rem;
+            text-align: center;
+            color: #1976d2;
+            font-size: 2rem;
             font-weight: 700;
-            margin-bottom: 18px;
+            margin-bottom: 28px;
+            letter-spacing: 1px;
         }
         label {
             display: block;
             margin-top: 18px;
             color: #2d3e50;
             font-weight: 500;
+            margin-bottom: 6px;
         }
         input[type="text"], input[type="email"], input[type="password"] {
             width: 100%;
-            padding: 10px 14px;
+            padding: 12px 16px;
             margin-top: 6px;
-            border: 1px solid #e0e0e0;
-            border-radius: 7px;
-            font-size: 1rem;
+            border: 1.5px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1.08rem;
             background: #f9f9fb;
             transition: border 0.2s;
+            box-sizing: border-box;
         }
         input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus {
-            border: 1.5px solid #e53935;
+            border: 1.5px solid #1976d2;
             outline: none;
         }
         button {
             width: 100%;
-            padding: 12px;
+            padding: 14px;
             margin-top: 28px;
-            background: #e53935;
+            background: #1976d2;
             color: #fff;
             border: none;
-            border-radius: 7px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 1.1rem;
+            font-size: 1.12rem;
             font-weight: 600;
-            box-shadow: 0 2px 8px rgba(229,57,53,0.08);
+            box-shadow: 0 2px 8px rgba(25,118,210,0.08);
             transition: background 0.2s;
         }
         button:hover {
-            background: #c0392b;
+            background: #1565c0;
+        }
+        select {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 7px;
+            border: 1.5px solid #e0e0e0;
+            background: #f9f9fb;
+            font-size: 1rem;
+            margin-bottom: 10px;
+            margin-top: 6px;
+            transition: border 0.2s;
+        }
+        select:focus {
+            border: 1.5px solid #1976d2;
+            outline: none;
+        }
+        .category-block {
+            background: #f7faff;
+            border-radius: 10px;
+            padding: 18px 16px 10px 16px;
+            margin-bottom: 18px;
+            box-shadow: 0 2px 8px rgba(25,118,210,0.04);
+        }
+        .skill-select label {
+            display: inline-block;
+            background: #e3eafc;
+            border-radius: 14px;
+            padding: 6px 16px;
+            margin: 4px 8px 4px 0;
+            font-size: 0.98rem;
+            color: #1976d2;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .skill-select label:hover {
+            background: #bbdefb;
+        }
+        .skill-select input[type="checkbox"] {
+            accent-color: #1976d2;
+            margin-right: 8px;
         }
         .modal-close {
             position: absolute;
@@ -145,12 +190,9 @@
     <input type="text" id="branch" name="branch" required value="{{ branch }}" {% if readonly_fields.branch %}readonly{% endif %}>
 
 
-    <label>Skills (select at least 3)</label>
-    <div class="dropdown" style="position:relative; margin-bottom:10px;">
-        <div id="skillsDropdownBtn" style="width:100%;min-height:44px;text-align:left;padding:10px 14px;border:1px solid #e0e0e0;border-radius:7px;background:#f9f9fb;cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:6px;"></div>
-        <div id="skillsDropdown" style="display:none;position:absolute;z-index:1000;width:100%;background:#fff;border:1px solid #e0e0e0;border-radius:7px;max-height:220px;overflow-y:auto;box-shadow:0 2px 8px rgba(0,0,0,0.08);padding:10px 0;"></div>
-    </div>
-    <small style="color:#888;">Select at least 3 skills.</small>
+    <label>Select 3-5 Categories (at least 1 skill per category):</label>
+    <div id="categorySkillBlocks"></div>
+    <small style="color:#888;">Select 3-5 categories and at least 1 skill per category.</small>
 
     <label for="achievements">Achievements</label>
     <input type="text" id="achievements" name="achievements" placeholder="Achievements (comma separated)">
@@ -164,78 +206,88 @@
         <button type="button" style="flex:1; background:#888;" onclick="window.parent.closeEditModal && window.parent.closeEditModal()">Cancel</button>
     </div>
     <script>
-        // Dropdown with checkboxes for skills, chip-style display
+        // Category and skill selection blocks
         document.addEventListener('DOMContentLoaded', async function() {
-            const dropdownBtn = document.getElementById('skillsDropdownBtn');
-            const dropdown = document.getElementById('skillsDropdown');
-            let selectedSkills = [];
-            function renderChips() {
-                dropdownBtn.innerHTML = '';
-                if (selectedSkills.length === 0) {
-                    const placeholder = document.createElement('span');
-                    placeholder.style.color = '#888';
-                    placeholder.textContent = 'Select skills';
-                    dropdownBtn.appendChild(placeholder);
-                } else {
-                    selectedSkills.forEach(skill => {
-                        const chip = document.createElement('span');
-                        chip.textContent = skill;
-                        chip.style = 'background:#e0e0e0;border-radius:12px;padding:4px 10px;margin:2px 2px 2px 0;display:inline-flex;align-items:center;font-size:0.95em;';
-                        const close = document.createElement('span');
-                        close.textContent = '×';
-                        close.style = 'margin-left:8px;cursor:pointer;color:#c0392b;font-weight:bold;';
-                        close.onclick = function(e) {
-                            e.stopPropagation();
-                            // Uncheck the corresponding checkbox
-                            const cb = dropdown.querySelector('input[type="checkbox"][value="'+skill.replace(/"/g,'\\"')+'"]');
-                            if (cb) cb.checked = false;
-                            selectedSkills = selectedSkills.filter(s => s !== skill);
-                            renderChips();
-                        };
-                        chip.appendChild(close);
-                        dropdownBtn.appendChild(chip);
-                    });
-                }
-            }
+            const blocksDiv = document.getElementById('categorySkillBlocks');
+            let categories = [];
             try {
                 const resp = await fetch('/api/skills-list');
                 if (resp.ok) {
                     const data = await resp.json();
-                    (data.skills || []).forEach(skill => {
-                        const label = document.createElement('label');
-                        label.style = 'display:block;padding:4px 12px;cursor:pointer;';
-                        const checkbox = document.createElement('input');
-                        checkbox.type = 'checkbox';
-                        checkbox.name = 'skills';
-                        checkbox.value = skill;
-                        checkbox.style.marginRight = '8px';
-                        checkbox.addEventListener('change', function() {
-                            selectedSkills = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-                            renderChips();
-                        });
-                        label.appendChild(checkbox);
-                        label.appendChild(document.createTextNode(skill));
-                        dropdown.appendChild(label);
-                    });
+                    categories = data.categories || [];
                 }
             } catch (e) { console.error('Failed to load skills list', e); }
-
-            renderChips();
-            dropdownBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-            });
-            document.addEventListener('click', function() {
-                dropdown.style.display = 'none';
-            });
-        });
-        // Require at least 3 skills selected
-        document.getElementById('studentForm').addEventListener('submit', function(e) {
-            const checked = document.querySelectorAll('#skillsDropdown input[type="checkbox"]:checked');
-            if (checked.length < 3) {
-                alert('Please select at least 3 skills.');
-                e.preventDefault();
+            // Render 5 category blocks
+            for (let i = 0; i < 5; i++) {
+                const block = document.createElement('div');
+                block.className = 'category-block';
+                // Category dropdown
+                const select = document.createElement('select');
+                select.id = 'category_' + i;
+                select.name = 'category_' + i;
+                select.innerHTML = '<option value="">Select Category</option>';
+                categories.forEach(catObj => {
+                    select.innerHTML += `<option value="${catObj.name}">${catObj.name}</option>`;
+                });
+                // Skill checkboxes
+                const skillDiv = document.createElement('div');
+                skillDiv.id = 'skills_' + i;
+                skillDiv.className = 'skill-select';
+                select.addEventListener('change', function() {
+                    skillDiv.innerHTML = '';
+                    const cat = select.value;
+                    const catObj = categories.find(c => c.name === cat);
+                    if (catObj && Array.isArray(catObj.skills)) {
+                        catObj.skills.forEach(skill => {
+                            const label = document.createElement('label');
+                            label.style = 'display:block;padding:4px 12px;cursor:pointer;';
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.name = 'skills_' + i;
+                            checkbox.value = skill;
+                            checkbox.style.marginRight = '8px';
+                            label.appendChild(checkbox);
+                            label.appendChild(document.createTextNode(skill));
+                            skillDiv.appendChild(label);
+                        });
+                    }
+                });
+                block.appendChild(select);
+                block.appendChild(skillDiv);
+                blocksDiv.appendChild(block);
             }
+        });
+        // Require at least 3 categories and 1 skill per category
+        document.getElementById('studentForm').addEventListener('submit', function(e) {
+            let selectedCats = 0;
+            let groupedSkills = {};
+            for (let i = 0; i < 5; i++) {
+                const cat = document.getElementById('category_' + i).value;
+                if (cat) {
+                    selectedCats++;
+                    const skills = document.querySelectorAll('#skills_' + i + ' input[type="checkbox"]:checked');
+                    if (skills.length < 1) {
+                        alert('Select at least 1 skill for each chosen category.');
+                        e.preventDefault();
+                        return;
+                    }
+                    groupedSkills[cat] = Array.from(skills).map(cb => cb.value);
+                }
+            }
+            if (selectedCats < 3) {
+                alert('Please select at least 3 categories.');
+                e.preventDefault();
+                return;
+            }
+            console.log("Grouped skills before submit:", groupedSkills);
+            // Remove any previous hidden skills inputs
+            document.querySelectorAll('input[name="skills_grouped"]').forEach(el => el.remove());
+            // Add a hidden input for the grouped skills as JSON
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'skills_grouped';
+            input.value = JSON.stringify(groupedSkills);
+            document.getElementById('studentForm').appendChild(input);
         });
     </script>
 </form>

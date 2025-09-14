@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from db.mongodb import get_db, get_db_connection
 from models.candidate import Candidate
 from pymongo import ReturnDocument
-from vector_db.qdrant import search_questions
+from vector_db.qdrant import allocate_and_retrieve_questions
 import random
 from datetime import datetime
 
@@ -81,16 +81,8 @@ async def candidate_portal(regno: str, name: str = ""):
     test_doc = tests.find_one({"student_regno": regno})
     if not test_doc:
         skill_list_existing = existing.get("skills", [])
-        aggregated = []
-        for skill in skill_list_existing:
-            for q in search_questions(skill, limit=15):
-                q = dict(q); q["skill"] = skill; aggregated.append(q)
-        seen_ids = set(); unique_qs = []
-        for q in aggregated:
-            key = q.get("id") or q.get("text")
-            if key and key not in seen_ids:
-                unique_qs.append(q); seen_ids.add(key)
-        selected = random.sample(unique_qs, min(9, len(unique_qs))) if unique_qs else []
+        selected_categories_skills = {"General": skill_list_existing}
+        selected = allocate_and_retrieve_questions(selected_categories_skills, total_questions=50)
         tests.insert_one({
             "student_regno": regno,
             "student_name": existing.get("name", name),
@@ -103,13 +95,18 @@ async def candidate_portal(regno: str, name: str = ""):
 
 @router.post("/api/registrations")
 async def register_user(
-        university_registration_number: str = Form(...),
-        name: str = Form(...),
-        semester: str = Form(...),
-        branch: str = Form(...),
-        skills: List[str] = Form(...),
+    university_registration_number: str = Form(...),
+    name: str = Form(...),
+    semester: str = Form(...),
+    branch: str = Form(...),
+    skills_grouped: str = Form(...),
 ):
     candidate_collection = get_db()
+    # Debug: print all form values received
+    import inspect
+    print("[DEBUG] Raw form values:")
+    for name, value in inspect.currentframe().f_locals.items():
+        print(f"    {name}: {value}")
     test_collection = get_db_connection()["candidate_tests"]
     submissions_collection = get_db_connection()["candidate_submissions"]
     # If candidate already exists, just show tile page (create test if missing)
@@ -118,18 +115,9 @@ async def register_user(
         candidate_id = existing.get("candidate_id")
         test_doc = test_collection.find_one({"student_regno": university_registration_number})
         if not test_doc:
-            # Generate and store questions for existing candidate (once)
-            skill_list_existing = existing.get("skills", [])
-            aggregated = []
-            for skill in skill_list_existing:
-                for q in search_questions(skill, limit=15):
-                    q = dict(q); q["skill"] = skill; aggregated.append(q)
-            seen_ids = set(); unique_qs = []
-            for q in aggregated:
-                key = q.get("id") or q.get("text")
-                if key and key not in seen_ids:
-                    unique_qs.append(q); seen_ids.add(key)
-            selected = random.sample(unique_qs, min(9, len(unique_qs))) if unique_qs else []
+            skill_list_existing = existing.get("skills_grouped", {})
+            selected_categories_skills = {cat: skills for cat, skills in skill_list_existing.items() if skills}
+            selected = allocate_and_retrieve_questions(selected_categories_skills, total_questions=50)
             test_collection.insert_one({
                 "student_regno": university_registration_number,
                 "student_name": existing.get("name", name),
@@ -154,32 +142,24 @@ async def register_user(
     )
     candidate_id = tracker["candidate_id"]
 
-
+    import json
+    # Parse grouped skills from JSON string
+    grouped_skills = json.loads(skills_grouped)
+    print("[DEBUG] grouped_skills received from form:", grouped_skills)
     candidate = Candidate(
         university_registration_number=university_registration_number,
         name=name,
-    # university_name and location removed
         semester=semester,
         branch=branch,
-        skills=skills
+        skills_grouped=grouped_skills
     )
     candidate_data = candidate.dict()
     candidate_data["user_type"] = "candidate"
     candidate_data["candidate_id"] = candidate_id
     result = candidate_collection.insert_one(candidate_data)
 
-    # Generate questions ONCE and store for later test taking
-    skill_list = [s.strip() for s in skills if s.strip()]
-    aggregated = []
-    for skill in skill_list:
-        for q in search_questions(skill, limit=15):
-            q = dict(q); q["skill"] = skill; aggregated.append(q)
-    seen_ids = set(); unique_qs = []
-    for q in aggregated:
-        key = q.get("id") or q.get("text")
-        if key and key not in seen_ids:
-            unique_qs.append(q); seen_ids.add(key)
-    selected = random.sample(unique_qs, min(9, len(unique_qs))) if unique_qs else []
+    selected_categories_skills = grouped_skills
+    selected = allocate_and_retrieve_questions(selected_categories_skills, total_questions=50)
     test_collection.insert_one({
         "student_regno": university_registration_number,
         "student_name": name,
@@ -194,16 +174,19 @@ async def register_user(
 @router.get("/api/skills-list")
 def get_skills_list():
     db = get_db_connection()
-    skills_collection = db["skills_list"]
-    pipeline = [
-        {"$unwind": "$skills"},
-        {"$group": {"_id": None, "allSkills": {"$addToSet": "$skills"}}},
-        {"$project": {"_id": 0, "allSkills": 1}}
-    ]
-    result = list(skills_collection.aggregate(pipeline))
-    # Flatten to 'skills' key for frontend dropdown/checkbox logic
-    skills = result[0]["allSkills"] if result and "allSkills" in result[0] else []
-    return JSONResponse(content={"skills": skills})
+    skills_collection = db["all_skills"]
+    all_docs = list(skills_collection.find({}))
+    categories = []
+    for doc in all_docs:
+        category = doc.get("category", "Unknown").title()
+        skills = doc.get("skills", [])
+        if not isinstance(skills, list):
+            continue
+        categories.append({
+            "name": category,
+            "skills": sorted([s.title() for s in skills])
+        })
+    return JSONResponse(content={"categories": categories})
 
 
 @router.post("/api/submit-answers")
@@ -279,42 +262,149 @@ async def take_test(regno: str, name: str = ""):
     if not test_doc:
         return HTMLResponse("<html><body><h2>No test prepared for this registration number.</h2></body></html>", status_code=404)
     questions = test_doc.get('questions', [])
-    form_parts = [
-        "<h1 style='margin-top:0;'>Skill Assessment Test</h1>",
-        "<form method='post' action='/api/submit-answers' style='text-align:left;'>",
-        f"<input type='hidden' name='student_regno' value='{regno}'>",
-        f"<input type='hidden' name='student_name' value='{test_doc.get('student_name', name)}'>",
-        f"<input type='hidden' name='total' value='{len(questions)}'>",
-    ]
+    # Group questions by category
+    from collections import defaultdict
+    category_map = defaultdict(list)
     for idx, q in enumerate(questions):
-        q_id = q.get('id') or f"auto_{idx}"
-        q_text = (q.get('text') or '').replace('"','&quot;')
-        opts = q.get('options') or []
-        skill = q.get('skill','')
-        difficulty = q.get('difficulty','')
-        form_parts.append("<div style='margin-bottom:28px;padding:18px 20px;border:1px solid #e0e0e0;border-radius:10px;background:#fff;'>")
-        form_parts.append(f"<p style='font-weight:600;margin:0 0 12px;'>Q{idx+1}. {q_text}</p>")
-        form_parts.append(f"<input type='hidden' name='question_id_{idx}' value='{q_id}'>")
-        form_parts.append(f"<input type='hidden' name='question_text_{idx}' value=\"{q_text}\">")
-        form_parts.append(f"<input type='hidden' name='skill_{idx}' value='{skill}'>")
-        form_parts.append(f"<input type='hidden' name='difficulty_{idx}' value='{difficulty}'>")
-        if opts:
-            form_parts.append("<div style='display:flex;flex-direction:column;gap:6px;'>")
-            for opt in opts:
-                safe_opt = str(opt).replace('"','&quot;')
-                form_parts.append(
-                    f"<label style='display:flex;gap:8px;align-items:center;font-weight:500;'>"
-                    f"<input type='radio' name='answer_{idx}' value=\"{safe_opt}\" required> {safe_opt}</label>"
-                )
-            form_parts.append("</div>")
+        cat = q.get('category', 'General')
+        category_map[cat].append((idx, q))
+    categories = list(category_map.keys())
+    # Default selected category: first one
+    # Build sidebar HTML
+    sidebar_html = "<h2>Categories</h2><ul>"
+    for cat in categories:
+        sidebar_html += f"<li data-cat='{cat}' onclick=\"showCategory('{cat}')\">{cat}</li>"
+    sidebar_html += "</ul>"
+
+    # Build main content HTML with navigation
+    main_content_html = "<h1 style='margin-top:0;'>Skill Assessment Test</h1>"
+    main_content_html += f"<form id='testForm' method='post' action='/api/submit-answers'>"
+    main_content_html += f"<input type='hidden' name='student_regno' value='{regno}'>"
+    main_content_html += f"<input type='hidden' name='student_name' value='{test_doc.get('student_name', name)}'>"
+    main_content_html += f"<input type='hidden' name='total' value='{len(questions)}'>"
+    for cat_idx, cat in enumerate(categories):
+        main_content_html += f"<div class='category-content' data-cat='{cat}' data-cat-idx='{cat_idx}' style='display:none;'>"
+        for idx, q in category_map[cat]:
+            main_content_html += "<div class='question-block'>"
+            safe_text = (q.get('text') or '').replace('"', '&quot;')
+            main_content_html += f"<p style='font-weight:600;margin:0 0 12px;'>Q{idx+1}. {safe_text}</p>"
+            main_content_html += f"<input type='hidden' name='question_id_{idx}' value='{q.get('id') or f'auto_{idx}'}>"
+            main_content_html += f"<input type='hidden' name='question_text_{idx}' value=\"{safe_text}\">"
+            main_content_html += f"<input type='hidden' name='skill_{idx}' value='{q.get('skill','')}'>"
+            main_content_html += f"<input type='hidden' name='difficulty_{idx}' value='{q.get('difficulty','')}'>"
+            if q.get('options'):
+                main_content_html += "<div style='display:flex;flex-direction:column;gap:6px;'>"
+                for opt in q.get('options'):
+                    safe_opt = str(opt).replace('"','&quot;')
+                    main_content_html += f"<label style='display:flex;gap:8px;align-items:center;font-weight:500;'><input type='radio' name='answer_{idx}' value=\"{safe_opt}\" required> {safe_opt}</label>"
+                main_content_html += "</div>"
+            else:
+                main_content_html += f"<textarea name='answer_{idx}' rows='2' style='width:100%;' required></textarea>"
+            main_content_html += "</div>"
+        # Navigation buttons
+        main_content_html += "<div class='nav-btns' style='display:flex;gap:16px;margin-top:32px;'>"
+        if cat_idx > 0:
+            main_content_html += f"<button type='button' class='prev-btn' onclick='navigateCategory({cat_idx-1})'>Previous</button>"
+        if cat_idx < len(categories)-1:
+            main_content_html += f"<button type='button' class='next-btn' onclick='validateAndNavigate({cat_idx+1})'>Next</button>"
         else:
-            form_parts.append(f"<textarea name='answer_{idx}' rows='2' style='width:100%;'></textarea>")
-        form_parts.append("</div>")
-    form_parts.append("<button type='submit' style='background:#1976d2;color:#fff;border:none;padding:12px 26px;font-size:1rem;font-weight:600;border-radius:6px;cursor:pointer;'>Submit Answers</button>")
-    form_parts.append("</form>")
+            main_content_html += f"<button type='button' class='finish-btn' onclick='validateAndSubmit()'>Finish Test</button>"
+        main_content_html += "</div>"
+        main_content_html += "</div>"
+    main_content_html += "</form>"
+
     html = f"""
     <!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Take Test</title><meta name='viewport' content='width=device-width,initial-scale=1.0'>
-    <style>body{{font-family:Arial,sans-serif;background:#f4f6fa;margin:0;}}.wrapper{{max-width:820px;margin:50px auto 80px;background:#fff;padding:48px 56px;border-radius:18px;box-shadow:0 4px 24px rgba(0,0,0,0.10);}}h1{{color:#2d3e50;}}</style></head>
-    <body><div class='wrapper'>{''.join(form_parts)}</div></body></html>
+    <style>
+        body{{font-family:Arial,sans-serif;background:#f4f6fa;margin:0;}}
+        .test-layout{{display:flex;max-width:1100px;margin:50px auto 80px;background:#fff;border-radius:18px;box-shadow:0 4px 24px rgba(0,0,0,0.10);}}
+        .sidebar{{width:220px;background:#f7faff;border-radius:18px 0 0 18px;padding:38px 0 0 0;box-shadow:0 2px 8px rgba(25,118,210,0.04);}}
+        .sidebar h2{{text-align:center;color:#1976d2;font-size:1.2rem;margin-bottom:24px;}}
+        .sidebar ul{{list-style:none;padding:0;margin:0;}}
+        .sidebar li{{padding:14px 32px;cursor:pointer;color:#1976d2;font-weight:600;font-size:1.05rem;transition:background 0.2s;}}
+        .sidebar li.selected{{background:#e3eafc;color:#1565c0;}}
+        .sidebar li:hover{{background:#bbdefb;}}
+        .main-content{{flex:1;padding:48px 56px;}}
+        .question-block{{margin-bottom:28px;padding:18px 20px;border:1px solid #e0e0e0;border-radius:10px;background:#fff;}}
+        .nav-btns button{{background:#1976d2;color:#fff;border:none;padding:12px 26px;font-size:1rem;font-weight:600;border-radius:6px;cursor:pointer;}}
+        .nav-btns button:hover{{background:#1565c0;}}
+        .nav-btns{{justify-content:flex-end;}}
+        .finish-btn{{background:#43a047;}}
+        .finish-btn:hover{{background:#2e7031;}}
+        .prev-btn{{background:#888;}}
+        .prev-btn:hover{{background:#555;}}
+        .error-msg{{color:#e53935;font-weight:600;margin-bottom:12px;}}
+    </style>
+    <script>
+        let categories = {categories};
+        let selectedCategory = 0;
+        function showCategory(idx) {{
+            selectedCategory = idx;
+            document.querySelectorAll('.sidebar li').forEach((li, i) => {{
+                li.classList.toggle('selected', i === idx);
+            }});
+            document.querySelectorAll('.category-content').forEach((div, i) => {{
+                div.style.display = i === idx ? 'block' : 'none';
+            }});
+            // Remove error message if any
+            document.querySelectorAll('.error-msg').forEach(el => el.remove());
+        }}
+        function navigateCategory(idx) {{
+            showCategory(idx);
+            window.scrollTo(0,0);
+        }}
+        function validateAndNavigate(nextIdx) {{
+            if (!validateCurrentCategory()) return;
+            navigateCategory(nextIdx);
+        }}
+        function validateAndSubmit() {{
+            if (!validateCurrentCategory()) return;
+            // Validate all categories before submit
+            for (let i = 0; i < categories.length; i++) {{
+                if (!validateCategory(i, true)) {{
+                    showCategory(i);
+                    return;
+                }}
+            }}
+            document.getElementById('testForm').submit();
+        }}
+        function validateCurrentCategory() {{
+            return validateCategory(selectedCategory, false);
+        }}
+        function validateCategory(idx, showGlobal) {{
+            const catDiv = document.querySelectorAll('.category-content')[idx];
+            const requiredInputs = catDiv.querySelectorAll('input[required], textarea[required]');
+            let allAnswered = true;
+            requiredInputs.forEach(input => {{
+                if ((input.type === 'radio' && !catDiv.querySelector('input[name="' + input.name + '"]:checked')) ||
+                    (input.type !== 'radio' && !input.value.trim())) {{
+                    allAnswered = false;
+                }}
+            }});
+            catDiv.querySelectorAll('.error-msg').forEach(el => el.remove());
+            if (!allAnswered) {{
+                const msg = document.createElement('div');
+                msg.className = 'error-msg';
+                msg.innerText = 'Please answer all questions before continuing.';
+                catDiv.prepend(msg);
+                if (showGlobal) window.scrollTo(0,0);
+                return false;
+            }}
+            return true;
+        }}
+        document.addEventListener('DOMContentLoaded', function() {{
+            showCategory(0);
+        }});
+    </script>
+    </head><body>
+    <div class='test-layout'>
+        <div class='sidebar'>
+            {sidebar_html}
+        </div>
+        <div class='main-content'>
+            {main_content_html}
+        </div>
+    </div>
+    </body></html>
     """
     return HTMLResponse(html)

@@ -16,7 +16,7 @@ class OllamaQuestionGenerator:
         # Create indexes
         try:
             self.collection.create_index("question_id", unique=True)
-            self.collection.create_index("domain")
+            self.collection.create_index("skill")
             self.collection.create_index("difficulty")
         except:
             pass
@@ -102,7 +102,6 @@ class OllamaQuestionGenerator:
         domains = list(self.collection.distinct("domain"))
         difficulties = list(self.collection.distinct("difficulty"))
         
-        # Group by domain and difficulty
         pipeline = [
             {
                 "$group": {
@@ -121,10 +120,8 @@ class OllamaQuestionGenerator:
             "breakdown": breakdown
         }
 
-
 def main():
-    # Read skills and category from all_skills collection in MongoDB
-    import pymongo
+    # Connect to MongoDB and load all skills
     client = pymongo.MongoClient('mongodb://localhost:27017/')
     db = client['internship-program']
     skills_collection = db['all_skills']
@@ -141,43 +138,70 @@ def main():
     import time
     start_time = time.time()
 
-    mcq_id = 1
+    last_entry = generator.collection.find_one(sort=[("question_id", -1)])
+    mcq_id = last_entry['question_id'] + 1 if last_entry else 1
+
     total_mcqs = 0
     difficulties = ["Beginner", "Intermediate", "Advanced"]
     min_questions = 10
+
     for doc in skills_docs:
         category = doc.get('category', 'Unknown')
         skills = doc.get('skills', [])
         for skill in skills:
-            print(f"\nGenerating MCQs for skill: {skill} (Category: {category})")
+            print(f"\nProcessing skill: {skill} (Category: {category})")
             for difficulty in difficulties:
+                existing_questions = list(generator.collection.find({
+                    "domain": skill,
+                    "difficulty": difficulty
+                }))
+                existing_count = len(existing_questions)
+
+                if existing_count >= min_questions:
+                    print(f"  Skipping {difficulty} for {skill}, already has {existing_count} questions.")
+                    # Update missing category if needed
+                    for q in existing_questions:
+                        if 'category' not in q or not q['category']:
+                            result = generator.collection.update_one(
+                                {"_id": q["_id"]},
+                                {"$set": {"category": category}}
+                            )
+                            if result.modified_count > 0:
+                                print(f"    Updated existing question_id {q['question_id']} with category '{category}'")
+                    continue
+
+                needed = min_questions - existing_count
+                print(f"  Generating {needed} more {difficulty} questions for {skill}")
+
                 generated_count = 0
                 attempts = 0
-                while generated_count < min_questions and attempts < min_questions * 2:
-                    print(f"  Generating {difficulty} MCQ {mcq_id} for skill: {skill}")
+                while generated_count < needed and attempts < needed * 3:
+                    print(f"    Generating {difficulty} MCQ {mcq_id} for skill: {skill}")
                     mcq = generator.generate_mcq(skill, difficulty)
                     if mcq:
                         mcq['question_id'] = mcq_id
                         mcq['category'] = category
+                        mcq['skill'] = skill
                         saved = generator.save_to_mongodb([mcq])
                         if saved:
-                            print(f"    Saved MCQ {mcq_id} to MongoDB.")
+                            print(f"      Saved MCQ {mcq_id} to MongoDB.")
                             total_mcqs += 1
                             generated_count += 1
                         else:
-                            print(f"    Failed to save MCQ {mcq_id} to MongoDB.")
+                            print(f"      Failed to save MCQ {mcq_id}. It might already exist.")
                         mcq_id += 1
                     else:
-                        print(f"    Failed to generate MCQ {mcq_id}")
+                        print(f"      Failed to generate MCQ {mcq_id}.")
                     attempts += 1
-                if generated_count < min_questions:
-                    print(f"    Only {generated_count} MCQs generated for skill '{skill}' at difficulty '{difficulty}'.")
+
+                if generated_count < needed:
+                    print(f"    Could only generate {generated_count}/{needed} questions for {skill} at {difficulty}.")
 
     end_time = time.time()
     elapsed = end_time - start_time
-    print(f"\n[INFO] Total MCQs saved: {total_mcqs}")
-    print(f"[INFO] Time taken to generate all questions: {elapsed:.2f} seconds")
-    print("[INFO] Database stats:", generator.get_database_stats())
+    print(f"\n[INFO] Total new MCQs saved: {total_mcqs}")
+    print(f"[INFO] Time taken: {elapsed:.2f} seconds")
+    print("[INFO] Updated database stats:", generator.get_database_stats())
 
 if __name__ == "__main__":
     print("[INFO] Running generate_questionarrie.py")
