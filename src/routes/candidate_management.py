@@ -1,15 +1,4 @@
 
-from fastapi import APIRouter, Body, Request, UploadFile, File
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-import os
-from csv_utils import extract_emails_from_csv, send_password_setup_email
-import threading
-
-router = APIRouter(prefix="", tags=["candidate_management"])
-
-
-
 # ...existing code...
 
 from fastapi import APIRouter, Request, UploadFile, File
@@ -169,3 +158,34 @@ async def add_candidate(candidate: dict = Body(...)):
     users_collection.insert_one(candidate)
     print("Candidate inserted successfully.")
     return {"success": True}
+
+@router.post("/update-candidate/")
+async def update_candidate(payload: dict = Body(...)):
+    # Extract unique identifier and updated fields
+    email = payload.get("email")
+    regNo = payload.get("regNo")
+    # Extract other fields to update
+    name = payload.get("name")
+    branch = payload.get("branch")
+    semester = payload.get("semester")
+    # ...add more fields as needed
+
+    if not email and not regNo:
+        return {"success": False, "error": "Missing email or registration number."}
+
+    from db.mongodb import get_db
+    users_collection = get_db()
+    # Build the query to find the record
+    query = {"email": email} if email else {"regNo": regNo}
+    # Build the update fields dictionary
+    update_fields = {}
+    if regNo: update_fields["regNo"] = regNo
+    if email: update_fields["email"] = email
+    if name: update_fields["name"] = name
+    if branch: update_fields["branch"] = branch
+    if semester: update_fields["semester"] = semester
+    # ...add more fields as needed
+
+    # Update the record in MongoDB
+    result = users_collection.update_one(query, {"$set": update_fields})
+    return {"success": result.modified_count == 1}

@@ -197,10 +197,21 @@
     <div id="projects-container"></div>
     <button type="button" class="btn-add-project" onclick="addProject()">Add Project</button>
 
-    <div style="display:flex; gap:16px; margin-top:32px;">
-        <button type="submit" style="flex:1;">Save Changes</button>
-        <button type="button" style="flex:1; background:#888;" onclick="window.parent.closeEditModal && window.parent.closeEditModal()">Cancel</button>
-    </div>
+    <div style="display:flex; gap:24px; margin-top:32px;">
+  <button 
+    type="submit" 
+    style="min-width:210px; height:50px; background:#1976d2; color:#fff; font-size:16px; border:none; border-radius:6px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.2);">
+    Save Changes
+  </button>
+
+  <button 
+    type="button" 
+    style="min-width:210px; height:50px; background:#e53935; color:#fff; font-size:16px; border:none; border-radius:6px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.2);" 
+    onclick="window.location.href='/logout';">
+    Cancel
+  </button>
+</div>
+
     <script>
         // Dropdown with checkboxes for skills, chip-style display
         document.addEventListener('DOMContentLoaded', async function() {
@@ -267,38 +278,96 @@
                 dropdown.style.display = 'none';
             });
         });
-        // Require at least 3 skills selected
-        document.getElementById('studentForm').addEventListener('submit', function(e) {
-            const checked = document.querySelectorAll('#skillsDropdown input[type="checkbox"]:checked');
-            if (checked.length < 3) {
-                alert('Please select at least 3 skills.');
-                e.preventDefault();
-            }
-        });
+        // Removed duplicate at least 3 skills check (handled in async submit handler below)
     </script>
 </form>
 
     <script>
-function addProject() {
+// function addProject() {
+//     const container = document.getElementById('projects-container');
+//     const idx = container.children.length;
+//     const projectEntry = document.createElement('div');
+//     projectEntry.className = 'project-entry';
+
+//     projectEntry.innerHTML = `
+//         <label>Project Title</label>
+//         <input type="text" name="project_title_${idx}" placeholder="Short, descriptive title" required>
+//         <label>Description</label>
+//         <textarea name="project_description_${idx}" placeholder="2-3 lines explaining the project" required></textarea>
+//         <label>Technology/Tools</label>
+//         <input type="text" name="project_tech_${idx}" placeholder="e.g., Python, Arduino (comma separated)" required>
+//         <label>Role/Contribution</label>
+//         <input type="text" name="project_role_${idx}" placeholder="What did you do?" required>
+//         <label>Link/Demo</label>
+//         <input type="text" name="project_link_${idx}" placeholder="GitHub, video, or live demo link">
+//         <div class="project-btn-row">
+//             <button type="button" class="btn-save" onclick="saveProject(this)">Save</button>
+//             <button type="button" class="btn-remove" onclick="removeProject(this)">Remove</button>
+//         </div>
+//     `;
+//     container.appendChild(projectEntry);
+// }
+
+// function removeProject(button) {
+//     button.closest('.project-entry').remove();
+// }
+
+// function saveProject(button) {
+//     const entry = button.closest('.project-entry');
+//     const title = entry.querySelector('input[name^="project_title_"]').value.trim();
+//     const description = entry.querySelector('textarea[name^="project_description_"]').value.trim();
+//     const technology = entry.querySelector('input[name^="project_tech_"]').value.trim();
+//     const role = entry.querySelector('input[name^="project_role_"]').value.trim();
+//     const link = entry.querySelector('input[name^="project_link_"]').value.trim();
+
+//     // Remove any previous error
+//     let errorDiv = entry.querySelector('.project-error');
+//     if (errorDiv) errorDiv.remove();
+
+//     if (!title || !description || !technology || !role || !link) {
+//         errorDiv = document.createElement('div');
+//         errorDiv.className = 'project-error';
+//         errorDiv.style = 'color:#e53935;margin-top:8px;font-size:0.98em;';
+//         errorDiv.textContent = 'Please fill all fields before saving this project.';
+//         entry.appendChild(errorDiv);
+//         return;
+//     }
+
+//     button.textContent = "Saved";
+//     button.disabled = true;
+//     button.style.opacity = "0.7";
+// }
+
+
+// Replace the addProject, removeProject, and saveProject functions (lines 181–217) with the following:
+
+
+function addProject(projectData = {}) {
     const container = document.getElementById('projects-container');
     const idx = container.children.length;
     const projectEntry = document.createElement('div');
     projectEntry.className = 'project-entry';
 
     projectEntry.innerHTML = `
-        <label>Project Title</label>
-        <input type="text" name="project_title_${idx}" placeholder="Short, descriptive title" required>
-        <label>Description</label>
-        <textarea name="project_description_${idx}" placeholder="2-3 lines explaining the project" required></textarea>
-        <label>Technology/Tools</label>
-        <input type="text" name="project_tech_${idx}" placeholder="e.g., Python, Arduino (comma separated)" required>
-        <label>Role/Contribution</label>
-        <input type="text" name="project_role_${idx}" placeholder="What did you do?" required>
-        <label>Link/Demo</label>
-        <input type="text" name="project_link_${idx}" placeholder="GitHub, video, or live demo link">
-        <div class="project-btn-row">
-            <button type="button" class="btn-save" onclick="saveProject(this)">Save</button>
-            <button type="button" class="btn-remove" onclick="removeProject(this)">Remove</button>
+        <div class="project-expanded">
+            <label>Project Title</label>
+            <input type="text" name="project_title_${idx}" placeholder="Short, descriptive title" required value="${projectData.title || ''}">
+            <label>Description</label>
+            <textarea name="project_description_${idx}" placeholder="2-3 lines explaining the project" required>${projectData.description || ''}</textarea>
+            <label>Technology/Tools</label>
+            <input type="text" name="project_tech_${idx}" placeholder="e.g., Python, Arduino (comma separated)" required value="${projectData.technology || ''}">
+            <label>Role/Contribution</label>
+            <input type="text" name="project_role_${idx}" placeholder="What did you do?" required value="${projectData.role || ''}">
+            <label>Link/Demo</label>
+            <input type="text" name="project_link_${idx}" placeholder="GitHub, video, or live demo link" value="${projectData.link || ''}">
+            <div class="project-btn-row">
+                <button type="button" class="btn-save" onclick="saveProject(this)">Save</button>
+                <button type="button" class="btn-remove" onclick="removeProject(this)">Remove</button>
+            </div>
+        </div>
+        <div class="project-collapsed" style="display:none;cursor:pointer;font-weight:600;font-size:1.08em;padding:12px 0 0 0;">
+            <span class="project-title-text"></span>
+            <span style="float:right;color:#2563eb;font-size:0.95em;">&#9660;</span>
         </div>
     `;
     container.appendChild(projectEntry);
@@ -310,6 +379,8 @@ function removeProject(button) {
 
 function saveProject(button) {
     const entry = button.closest('.project-entry');
+    const expanded = entry.querySelector('.project-expanded');
+    const collapsed = entry.querySelector('.project-collapsed');
     const title = entry.querySelector('input[name^="project_title_"]').value.trim();
     const description = entry.querySelector('textarea[name^="project_description_"]').value.trim();
     const technology = entry.querySelector('input[name^="project_tech_"]').value.trim();
@@ -325,14 +396,22 @@ function saveProject(button) {
         errorDiv.className = 'project-error';
         errorDiv.style = 'color:#e53935;margin-top:8px;font-size:0.98em;';
         errorDiv.textContent = 'Please fill all fields before saving this project.';
-        entry.appendChild(errorDiv);
+        expanded.appendChild(errorDiv);
         return;
     }
 
-    button.textContent = "Saved";
-    button.disabled = true;
-    button.style.opacity = "0.7";
+    // Collapse to title view
+    expanded.style.display = 'none';
+    collapsed.style.display = 'block';
+    collapsed.querySelector('.project-title-text').textContent = title;
+
+    // Toggle expand/collapse on click
+    collapsed.onclick = function() {
+        expanded.style.display = 'block';
+        collapsed.style.display = 'none';
+    };
 }
+
 
 document.getElementById('studentForm').addEventListener('submit', async function(e) {
     // Collect skills data
