@@ -48,9 +48,16 @@ def get_next_mentor_id(mentor_collection):
     )
     return tracker["mentor_id"]
 
+from fastapi import Request
+from fastapi.templating import Jinja2Templates
+templates = Jinja2Templates(directory="src/templates")
+
 @router.post("/api/create-mentor")
-async def create_mentor(mentor: Mentor, _: HTTPBasicCredentials = Depends(authenticate)):
+async def create_mentor(request: Request, mentor: Mentor, _: HTTPBasicCredentials = Depends(authenticate)):
     mentor_collection = get_db()
+    # Validate contact number length (user-friendly error)
+    if not mentor.contact_number.isdigit() or len(mentor.contact_number) != 10:
+        return templates.TemplateResponse("create_mentor.html", {"request": request, "error": "Contact number must be exactly 10 digits."})
     try:
         # Check for existing mentor with same email
         existing = mentor_collection.find_one({
