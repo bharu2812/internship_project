@@ -176,6 +176,8 @@
     </style>
 </head>
 <body>
+    {# Top navigation bar with logout button #}
+    {% include 'partials/nav.html' %}
     <!-- Lenovo Header -->
     <div class="header-gradient">
         <a href="https://www.lenovo.com/in/en/?Redirect=False" target="_blank">
@@ -186,12 +188,10 @@
     <!-- Main Content -->
     <div class="main-content">
         <div class="info-section">
-            <ul style="font-size: 1.1rem; color: #2c3e50; line-height: 1.6;">
-                <li>
-                    Here is the downloadable template for adding POC Ideas
-                    <a href="/static/poc_idea_template.xlsx" download="poc_idea_template.xlsx" class="download-link">Download Excel Template</a>
-                </li>
-            </ul>
+            <div style="font-size: 1.1rem; color: #2c3e50; line-height: 1.6;">
+                Here is the downloadable template for adding POC Ideas
+                <a href="/static/poc_idea_template.xlsx" download="poc_idea_template.xlsx" class="download-link">Download Excel Template</a>
+            </div>
         </div>
         
         <!-- POC and Allocation Table -->
@@ -244,6 +244,9 @@
                     <option value="Advanced">Advanced</option>
                 </select>
                 
+                <label for="mentorContact">Mentor Contact Number</label>
+                <input type="text" id="mentorContact" name="mentorContact" required pattern="[0-9]{10}" maxlength="10" placeholder="Enter 10-digit number">
+
                 <label for="matchedStudents">Matched Students</label>
                 <input type="text" id="matchedStudents" name="matchedStudents" placeholder="Student Registration Numbers or Names (comma separated)">
                 
@@ -399,19 +402,23 @@
         // Handle form submission
         document.getElementById('addForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+            const mentorContact = document.getElementById('mentorContact').value.trim();
+            if (!/^\d{10}$/.test(mentorContact)) {
+                alert('Please enter a valid 10-digit contact number.');
+                document.getElementById('mentorContact').focus();
+                return;
+            }
             const formData = new FormData(e.target);
             const pocEntry = {
                 title: formData.get('pocTitle'),
                 description: formData.get('description'),
                 requiredSkills: formData.get('requiredSkills'),
                 difficulty: formData.get('difficulty'),
+                mentorContact: mentorContact,
                 matchedStudents: formData.get('matchedStudents')
             };
-            
             try {
                 const editIndex = e.target.dataset.editIndex;
-                
                 if (editIndex !== undefined) {
                     // Update existing POC
                     const poc = pocData[editIndex];
@@ -441,7 +448,6 @@
                         },
                         body: JSON.stringify(pocEntry)
                     });
-                    
                     if (response.ok) {
                         pocData.push(pocEntry);
                     } else {
@@ -449,10 +455,8 @@
                         pocData.push(pocEntry); // Add locally anyway
                     }
                 }
-                
                 loadPOCData();
                 closeAddDialog();
-                
             } catch (error) {
                 console.error('Error saving POC:', error);
                 // Add locally if server request fails
