@@ -663,7 +663,7 @@ async def submit_mentor(
                         </a>
                     </div>
                     <div class="error-title">Error Creating Mentor</div>
-                    <div class="error-msg">{response.text}</div>
+                    <div class="error-msg">Mentor creation failed. Please try again or contact admin.</div>
                     <form action="/create-mentor-form" method="get">
                         <button class="back-btn" type="submit">Back to Form</button>
                     </form>

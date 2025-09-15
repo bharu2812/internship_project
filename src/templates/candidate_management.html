@@ -180,6 +180,28 @@
             </form>
         </div>
     </div>
+
+    <div class="dialog" id="editDialog">
+        <div class="dialog-content">
+            <h3>Edit Candidate Record</h3>
+            <form id="editForm">
+                <label for="editRegNo">Registration No</label>
+                <input type="text" id="editRegNo" name="regNo" required readonly>
+                <label for="editEmail">Email ID</label>
+                <input type="email" id="editEmail" name="email" required>
+                <label for="editName">Name</label>
+                <input type="text" id="editName" name="name" required>
+                <label for="editBranch">Branch</label>
+                <input type="text" id="editBranch" name="branch" required>
+                <label for="editSemester">Semester</label>
+                <input type="text" id="editSemester" name="semester" required>
+                <div class="actions">
+                    <button type="button" onclick="closeEditDialog()">Cancel</button>
+                    <button type="submit">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <input type="file" id="csvInput" accept=".csv" style="display:none" />
     <script>
     // Reload candidates from backend and update table
@@ -198,10 +220,28 @@
     }
 
     function showAddDialog() {
-        document.getElementById('addDialog').classList.add('show');
+        // Reset form and set to add mode
+        const dialog = document.getElementById('addDialog');
+        const form = document.getElementById('addForm');
+        form.reset();
+        dialog.querySelector('h3').innerText = 'Add Candidate Record';
+        dialog.querySelector('button[type="submit"]').innerText = 'Add';
+        form.setAttribute('data-mode', 'add');
+        dialog.classList.add('show');
     }
     function closeAddDialog() {
         document.getElementById('addDialog').classList.remove('show');
+    }
+
+    function showEditDialog({regNo, email, name, branch, semester}) {
+        const dialog = document.getElementById('editDialog');
+        const form = document.getElementById('editForm');
+        form.editRegNo.value = regNo;
+        form.editEmail.value = email;
+        form.editName.value = name;
+        form.editBranch.value = branch;
+        form.editSemester.value = semester;
+        dialog.classList.add('show');
     }
     document.getElementById('addForm').onsubmit = async function(e) {
         e.preventDefault();
@@ -259,43 +299,53 @@
         row.setAttribute('data-email', email);
         updateCandidateCount();
     }
-    let editModal = null;
-    async function editCandidate(icon) {
+    // Removed obsolete editModal variable
+    function editCandidate(icon) {
         const row = icon.closest('tr');
         const regNo = row.cells[0].innerText.trim();
         const email = row.cells[1].innerText.trim();
         const name = row.cells[2].innerText.trim();
         const branch = row.cells[3].innerText.trim();
         const semester = row.cells[4].innerText.trim();
-        // Pass all fields as query params for prefill
-        const params = new URLSearchParams({
-            regNo, email, name, branch, semester, edit: '1'
+        showEditDialog({regNo, email, name, branch, semester});
+    }
+    function closeEditDialog() {
+        document.getElementById('editDialog').classList.remove('show');
+    }
+
+    // Submit edit form via fetch and update table row
+    document.getElementById('editForm').onsubmit = async function(e) {
+        e.preventDefault();
+        const regNo = this.editRegNo.value.trim();
+        const email = this.editEmail.value.trim();
+        const name = this.editName.value.trim();
+        const branch = this.editBranch.value.trim();
+        const semester = this.editSemester.value.trim();
+        const payload = { regNo, email, name, branch, semester };
+        const response = await fetch('/update-candidate/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
-        const response = await fetch(`/register?${params.toString()}`);
-        const html = await response.text();
-        // Create modal if not exists
-        if (!editModal) {
-            editModal = document.createElement('div');
-            editModal.id = 'editCandidateModal';
-            editModal.style.position = 'fixed';
-            editModal.style.top = '0';
-            editModal.style.left = '0';
-            editModal.style.width = '100vw';
-            editModal.style.height = '100vh';
-            editModal.style.background = 'rgba(0,0,0,0.3)';
-            editModal.style.zIndex = '9999';
-            editModal.style.display = 'flex';
-            editModal.style.justifyContent = 'center';
-            editModal.style.alignItems = 'center';
-            document.body.appendChild(editModal);
+        const result = await response.json();
+        if (result.success) {
+            // Update the table row in place
+            const table = document.getElementById('candidateTable').getElementsByTagName('tbody')[0];
+            for (let row of table.rows) {
+                if (row.cells[0].innerText.trim() === regNo) {
+                    row.cells[1].innerText = email;
+                    row.cells[2].innerText = name;
+                    row.cells[3].innerText = branch;
+                    row.cells[4].innerText = semester;
+                    break;
+                }
+            }
+            alert('Candidate updated successfully.');
+            closeEditDialog();
+        } else {
+            alert('Failed to update candidate.');
         }
-        // Increase modal width
-    editModal.innerHTML = `<div style='background:#fff;padding:32px 48px;min-width:600px;max-width:900px;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.10);'>${html}</div>`;
-        editModal.style.display = 'flex';
-    }
-    function closeEditModal() {
-        if (editModal) editModal.style.display = 'none';
-    }
+    };
     async function deleteCandidate(icon) {
         if (!confirm('Are you sure you want to delete this candidate?')) return;
         const row = icon.closest('tr');
@@ -382,3 +432,5 @@
     </script>
 </body>
 </html>
+
+
