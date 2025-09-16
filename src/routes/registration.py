@@ -85,14 +85,15 @@ async def candidate_portal(regno: str, name: str = ""):
         skill_list_existing = existing.get("skills", [])
         aggregated = []
         for skill in skill_list_existing:
-            for q in search_questions(skill, limit=15):
+            for q in search_questions(skill, limit=30):
+                print("q",q)
                 q = dict(q); q["skill"] = skill; aggregated.append(q)
         seen_ids = set(); unique_qs = []
         for q in aggregated:
             key = q.get("id") or q.get("text")
             if key and key not in seen_ids:
                 unique_qs.append(q); seen_ids.add(key)
-        selected = random.sample(unique_qs, min(9, len(unique_qs))) if unique_qs else []
+        selected = random.sample(unique_qs, min(30, len(unique_qs))) if unique_qs else []
         tests.insert_one({
             "student_regno": regno,
             "student_name": existing.get("name", name),
@@ -159,7 +160,7 @@ async def register_user(
                 key = q.get("id") or q.get("text")
                 if key and key not in seen_ids:
                     unique_qs.append(q); seen_ids.add(key)
-            selected = random.sample(unique_qs, min(9, len(unique_qs))) if unique_qs else []
+            selected = random.sample(unique_qs, min(30, len(unique_qs))) if unique_qs else []
             test_collection.insert_one({
                 "student_regno": university_registration_number,
                 "student_name": existing.get("name", name),
@@ -212,7 +213,7 @@ async def register_user(
         key = q.get("id") or q.get("text")
         if key and key not in seen_ids:
             unique_qs.append(q); seen_ids.add(key)
-    selected = random.sample(unique_qs, min(9, len(unique_qs))) if unique_qs else []
+    selected = random.sample(unique_qs, min(30, len(unique_qs))) if unique_qs else []
     test_collection.insert_one({
         "student_regno": university_registration_number,
         "student_name": name,

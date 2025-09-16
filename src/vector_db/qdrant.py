@@ -26,7 +26,7 @@ client = QdrantClient(url=CLOUD_URL, api_key=CLOUD_API_KEY, check_compatibility=
 embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 COLLECTION_NAME = "question_bank"
-
+FINAL_COLLECTION_NAME = "final_question_bank"
 
 # Define schema for a question and create collection in Qdrant
 def get_vector_dimension() -> int:
@@ -34,10 +34,10 @@ def get_vector_dimension() -> int:
     return len(sample)
 
 def create_collection():
-    if client.collection_exists(COLLECTION_NAME):
-        client.delete_collection(COLLECTION_NAME)
+    if client.collection_exists(FINAL_COLLECTION_NAME):
+        client.delete_collection(FINAL_COLLECTION_NAME)
     client.create_collection(
-        collection_name=COLLECTION_NAME,
+        collection_name=FINAL_COLLECTION_NAME,
         vectors_config=VectorParams(
             size=get_vector_dimension(),
             distance=Distance.COSINE
@@ -70,7 +70,7 @@ def add_questions(questions: List[Dict]):
             }
         )
         points.append(point)
-    client.upsert(collection_name=COLLECTION_NAME, points=points)
+    client.upsert(collection_name=FINAL_COLLECTION_NAME, points=points)
 
 # Fetch all questions from MongoDB and save to Qdrant
 def sync_questions_from_mongo_to_qdrant():
@@ -89,7 +89,7 @@ def search_questions(skill: str, limit: int = 10) -> List[Dict]:
     """
     embedding = embedding_model.encode([skill])[0].tolist()
     results = client.search(
-        collection_name=COLLECTION_NAME,
+        collection_name=FINAL_COLLECTION_NAME,
         query_vector=embedding,
         limit=limit,
         with_payload=True
