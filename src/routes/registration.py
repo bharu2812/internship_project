@@ -276,8 +276,14 @@ async def submit_answers(request: Request):
         'submitted_at': datetime.utcnow()
     }
     submissions.insert_one(doc)
+    
     # Mark test as completed
     db['candidate_tests'].update_one({"student_regno": student_regno}, {"$set": {"status": "submitted", "submitted_at": datetime.utcnow()}}, upsert=False)
+    
+    # --- ADD THIS LINE ---
+    score_candidate_submission(student_regno, submitted_answers, db)
+    # ---------------------
+    
     # Confirmation page
     # Return lightweight page that immediately shows a dialog and redirects
     html = f"""
@@ -352,3 +358,85 @@ async def take_test(regno: str, name: str = ""):
     <body><div class='wrapper'>{''.join(form_parts)}</div></body></html>
     """
     return HTMLResponse(html)
+
+def score_candidate_submission(student_regno: str, submitted_answers: list, db):
+    """
+    Calculates skill-wise and difficulty-wise percentage of correct answers for a candidate's test submission.
+    Stores the result in candidate_submissions under 'skill_scores'.
+    """
+    tests = db['candidate_tests']
+    submissions = db['candidate_submissions']
+    test_doc = tests.find_one({"student_regno": student_regno})
+    if not test_doc:
+        return
+
+    # Map question_id to correct answer and metadata
+    question_map = {}
+    for q in test_doc.get('questions', []):
+        qid = str(q.get('id'))
+        question_map[qid] = {
+            'correct_answer': q.get('answer'),  # <-- FIXED: use 'answer' field
+            'skill': q.get('skill'),
+            'difficulty': q.get('difficulty')
+        }
+
+    # skill -> difficulty -> [correct_count, total_count]
+    skill_scores = {}
+    for ans in submitted_answers:
+        qid = str(ans.get('question_id'))
+        chosen = ans.get('chosen_answer')
+        meta = question_map.get(qid)
+        if not meta:
+            continue
+        skill = meta.get('skill', 'Unknown')
+        difficulty = meta.get('difficulty', 'Unknown')
+        correct_answer = meta.get('correct_answer')
+        is_correct = str(chosen).strip() == str(correct_answer).strip() if correct_answer is not None else False
+
+        skill_scores.setdefault(skill, {})
+        skill_scores[skill].setdefault(difficulty, [0, 0])
+        skill_scores[skill][difficulty][1] += 1  # total
+        if is_correct:
+            skill_scores[skill][difficulty][0] += 1  # correct
+
+    # Calculate percentages
+    skill_percentages = {}
+    for skill, diff_dict in skill_scores.items():
+        skill_percentages[skill] = {}
+        for diff, (correct, total) in diff_dict.items():
+            percent = (correct / total * 100) if total > 0 else 0
+            skill_percentages[skill][diff] = round(percent, 2)
+
+    # Assign grades
+    skill_grades = assign_skill_grade(skill_percentages)
+
+    # Store scores and grades in candidate_submissions
+    submissions.update_one(
+        {'student_regno': student_regno},
+        {'$set': {
+            'skill_scores': skill_percentages,
+            'skill_grades': skill_grades
+        }},
+        upsert=False
+    )
+
+def assign_skill_grade(skill_percentages):
+    """
+    Assigns grade ("A", "I", "B", "F") for each skill based on percentage rules.
+    """
+    skill_grades = {}
+    for skill, levels in skill_percentages.items():
+        beginner = levels.get("Beginner", 0)
+        intermediate = levels.get("Intermediate", 0)
+        advanced = levels.get("Advanced", 0)
+        if beginner >= 90:
+            if intermediate >= 60:
+                if advanced >= 40:
+                    skill_grades[skill] = "A"
+                else:
+                    skill_grades[skill] = "I"
+            else:
+                skill_grades[skill] = "B"
+        else:
+            skill_grades[skill] = "F"
+    return skill_grades
