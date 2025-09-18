@@ -231,7 +231,7 @@ async def import_poc_excel(file: UploadFile = File(...)):
                     poc_groups[poc_key] = {
                         "title": str(poc_title).strip(),
                         "description": str(description).strip(),
-                        "skills": [],
+                        "required_skills": [],
                         "difficulties": [],
                         "students": []  # Keep students array but leave empty from import
                     }
@@ -239,7 +239,7 @@ async def import_poc_excel(file: UploadFile = File(...)):
                 # Add skill and its corresponding difficulty (always, even if repeated)
                 if required_skill:
                     skill = str(required_skill).strip()
-                    poc_groups[poc_key]["skills"].append(skill)
+                    poc_groups[poc_key]["required_skills"].append(skill)
                     poc_groups[poc_key]["difficulties"].append(difficulty_str)
 
             elif required_skill or difficulty_level:
@@ -250,7 +250,7 @@ async def import_poc_excel(file: UploadFile = File(...)):
 
                     skill = str(required_skill).strip() if required_skill else ""
                     difficulty_str = str(difficulty_level).strip().upper()
-                    poc_groups[last_poc_key]["skills"].append(skill)
+                    poc_groups[last_poc_key]["required_skills"].append(skill)
                     poc_groups[last_poc_key]["difficulties"].append(difficulty_str)
         
         # Convert grouped POCs to database format
@@ -270,16 +270,16 @@ async def import_poc_excel(file: UploadFile = File(...)):
                 skipped_count += 1
                 continue
 
-            # Store skills and difficulties as parallel lists (for export)
+            # Store required_skills and difficulties as parallel lists (for export)
             poc_entry = {
                 "_id": f"poc_{len(poc_data_list) + len(list(mentor_collection.find({'type': 'poc'}))) + 1}",
                 "type": "poc",
                 "title": poc_data["title"],
                 "description": poc_data["description"],
-                "skills": poc_data["skills"],
+                "required_skills": poc_data["required_skills"],
                 "difficulties": poc_data["difficulties"],
-                "requiredSkills": ", ".join(poc_data["skills"]) if poc_data["skills"] else "",
-                "difficulty": ", ".join(poc_data["difficulties"]) if poc_data["difficulties"] else "B",
+                # "requiredSkills": ", ".join(poc_data["skills"]) if poc_data["skills"] else "",
+                # "difficulty": ", ".join(poc_data["difficulties"]) if poc_data["difficulties"] else "B",
                 "matchedStudents": ", ".join(poc_data["students"]) if poc_data["students"] else ""
             }
 
@@ -338,12 +338,12 @@ async def export_poc_excel():
         for row, poc in enumerate(pocs, 2):
             worksheet.cell(row=row, column=1, value=poc.get('title', ''))
             worksheet.cell(row=row, column=2, value=poc.get('description', ''))
-            # Export skills as comma-separated
-            skills = poc.get('skills')
-            if isinstance(skills, list):
-                worksheet.cell(row=row, column=3, value=", ".join(skills))
+            # Export required_skills as comma-separated
+            required_skills = poc.get('required_skills')
+            if isinstance(required_skills, list):
+                worksheet.cell(row=row, column=3, value=", ".join(required_skills))
             else:
-                worksheet.cell(row=row, column=3, value=poc.get('requiredSkills', ''))
+                worksheet.cell(row=row, column=3, value="")
 
             # Export difficulties as comma-separated, matching skills order
             difficulties = poc.get('difficulties')
@@ -388,3 +388,42 @@ async def export_poc_excel():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error exporting Excel file: {str(e)}")
+
+def update_poc_matched_students(student_regno: str, skill_grades: dict, poc_collection):
+    """
+    For each POC, check if the student's skill grades match all required skills and difficulties.
+    Extra skills in the candidate are allowed, but all required skills must be present with matching grades.
+    If matched, add the student_regno to the POC's students list in the DB.
+    """
+    pocs = list(poc_collection.find({"type": "poc"}))
+    print(f"Checking {len(pocs)} POCs for student {student_regno}...")
+    for poc in pocs:
+        required_skills = poc.get("skills", [])
+        required_difficulties = poc.get("difficulties", [])
+        print(f"POC '{poc.get('title', poc.get('_id'))}': Required skills={required_skills}, Required difficulties={required_difficulties}")
+        if not required_skills or not required_difficulties:
+            print("  Skipped: Missing required skills or difficulties.")
+            continue
+        match = True
+        for skill, diff in zip(required_skills, required_difficulties):
+            candidate_grade = skill_grades.get(skill.lower()) or skill_grades.get(skill)
+            print(f"    Skill '{skill}': Candidate grade={candidate_grade}, Required={diff}")
+            # Define skill levels order
+            skill_levels = {'B': 1, 'I': 2, 'A': 3}
+            if not candidate_grade or skill_levels.get(candidate_grade, 0) < skill_levels.get(diff, 0):
+                match = False
+                print("    -> Not matched.")
+                break
+        if match:
+            students = poc.get("matched_students", [])
+            if student_regno not in students:
+                students.append(student_regno)
+                poc_collection.update_one(
+                    {"_id": poc["_id"]},
+                    {"$set": {"matched_students": students}}
+                )
+                print(f"  -> Matched! Added student {student_regno}. Students now: {students}")
+            else:
+                print(f"  -> Already matched. Students: {students}")
+        else:
+            print(f"  -> Not matched for this POC.")

@@ -1,4 +1,3 @@
-from fastapi import APIRouter, Form, Request
 """
 MongoDB Collections Overview:
 
@@ -19,11 +18,13 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from db.mongodb import get_db, get_db_connection
 from models.candidate import Candidate
 from pymongo import ReturnDocument
-from vector_db.qdrant import search_questions
+from vector_db.qdrant import search_questions,search_questions_by_skill_category_difficulty
 import random
 from datetime import datetime
 from typing import List, Optional
 import json
+from vector_db.qdrant import allocate_and_retrieve_questions
+from routes.mentor import update_poc_matched_students
 
 router = APIRouter()
 
@@ -83,17 +84,25 @@ async def candidate_portal(regno: str, name: str = ""):
     test_doc = tests.find_one({"student_regno": regno})
     if not test_doc:
         skill_list_existing = existing.get("skills", [])
-        aggregated = []
+        # Build selected_categories_skills from skills_list collection
+        db = get_db_connection()
+        skills_collection = db["skills_list"]
+        # Fetch all skills and their categories
+        skill_to_category = {}
+        for doc in skills_collection.find():
+            category = doc.get("category")
+            for skill in doc.get("skills", []):
+                skill_to_category[skill] = category
+        selected_categories_skills = {}
         for skill in skill_list_existing:
-            for q in search_questions(skill, limit=30):
-                print("q",q)
-                q = dict(q); q["skill"] = skill; aggregated.append(q)
-        seen_ids = set(); unique_qs = []
-        for q in aggregated:
-            key = q.get("id") or q.get("text")
-            if key and key not in seen_ids:
-                unique_qs.append(q); seen_ids.add(key)
-        selected = random.sample(unique_qs, min(30, len(unique_qs))) if unique_qs else []
+            category = skill_to_category.get(skill)
+            selected_categories_skills.setdefault(category, []).append(skill)
+        selected = allocate_and_retrieve_questions(selected_categories_skills, total_questions=30)
+        # Ensure every question has skill, category, and difficulty set
+        for q in selected:
+            q["skill"] = q.get("skill")
+            q["category"] = q.get("category")
+            q["difficulty"] = q.get("difficulty")
         tests.insert_one({
             "student_regno": regno,
             "student_name": existing.get("name", name),
@@ -117,6 +126,11 @@ async def register_user(
         email: Optional[str] = Form(None)
 ):
     users = get_db()  # This is your user collection
+        # Debug: print all form values received
+    import inspect
+    print("[DEBUG] Raw form values:")
+    for name, value in inspect.currentframe().f_locals.items():
+        print(f"    {name}: {value}")
     skills_list = json.loads(skills) if skills else []
     projects_list = json.loads(projects) if projects else []
 
@@ -149,18 +163,9 @@ async def register_user(
         candidate_id = existing.get("candidate_id")
         test_doc = test_collection.find_one({"student_regno": university_registration_number})
         if not test_doc:
-            # Generate and store questions for existing candidate (once)
-            skill_list_existing = existing.get("skills", [])
-            aggregated = []
-            for skill in skill_list_existing:
-                for q in search_questions(skill, limit=15):
-                    q = dict(q); q["skill"] = skill; aggregated.append(q)
-            seen_ids = set(); unique_qs = []
-            for q in aggregated:
-                key = q.get("id") or q.get("text")
-                if key and key not in seen_ids:
-                    unique_qs.append(q); seen_ids.add(key)
-            selected = random.sample(unique_qs, min(30, len(unique_qs))) if unique_qs else []
+            skill_list_existing = existing.get("skills", {})
+            selected_categories_skills = {cat: skills for cat, skills in skill_list_existing.items() if skills}
+            selected = allocate_and_retrieve_questions(selected_categories_skills, total_questions=30)
             test_collection.insert_one({
                 "student_regno": university_registration_number,
                 "student_name": existing.get("name", name),
@@ -206,14 +211,19 @@ async def register_user(
     skill_list = [s.strip() for s in skills if s.strip()]
     aggregated = []
     for skill in skill_list:
-        for q in search_questions(skill, limit=15):
-            q = dict(q); q["skill"] = skill; aggregated.append(q)
+        for q in search_questions_by_skill_category_difficulty(skill, limit=50):
+            q = dict(q)
+            # Ensure skill, category, and difficulty are set
+            q["skill"] = q.get("skill")
+            q["category"] = q.get("category")
+            q["difficulty"] = q.get("difficulty")
+            aggregated.append(q)
     seen_ids = set(); unique_qs = []
     for q in aggregated:
         key = q.get("id") or q.get("text")
         if key and key not in seen_ids:
             unique_qs.append(q); seen_ids.add(key)
-    selected = random.sample(unique_qs, min(30, len(unique_qs))) if unique_qs else []
+    selected = random.sample(unique_qs, min(10, len(unique_qs))) if unique_qs else []
     test_collection.insert_one({
         "student_regno": university_registration_number,
         "student_name": name,
@@ -282,8 +292,13 @@ async def submit_answers(request: Request):
     
     # --- ADD THIS LINE ---
     score_candidate_submission(student_regno, submitted_answers, db)
+    # After scoring, fetch skill_grades and update POC matches
+    submission_doc = db['candidate_submissions'].find_one({'student_regno': student_regno})
+    skill_grades = submission_doc.get('skill_grades', {}) if submission_doc else {}
+    update_poc_matched_students(student_regno, skill_grades, db['users'])
     # ---------------------
     
+
     # Confirmation page
     # Return lightweight page that immediately shows a dialog and redirects
     html = f"""
@@ -375,46 +390,57 @@ def score_candidate_submission(student_regno: str, submitted_answers: list, db):
     for q in test_doc.get('questions', []):
         qid = str(q.get('id'))
         question_map[qid] = {
-            'correct_answer': q.get('answer'),  # <-- FIXED: use 'answer' field
+            'correct_answer': q.get('answer'),
             'skill': q.get('skill'),
+            'category': q.get('category'),
             'difficulty': q.get('difficulty')
         }
 
-    # skill -> difficulty -> [correct_count, total_count]
-    skill_scores = {}
+    # 1. Per skill: skill_score% = correct answers / total questions for skill * 100
+    skill_correct = {}
+    skill_total = {}
+    # 2. Per category: category_score% = sum(correct answers of all skills in category) / total questions in category * 100
+    category_correct = {}
+    category_total = {}
+    # 3. Overall: overall_score% = sum(correct answers for all questions) / total_questions * 100
+    overall_correct = 0
+    overall_total = len(test_doc.get('questions', []))
+
     for ans in submitted_answers:
         qid = str(ans.get('question_id'))
         chosen = ans.get('chosen_answer')
         meta = question_map.get(qid)
         if not meta:
             continue
-        skill = meta.get('skill', 'Unknown')
-        difficulty = meta.get('difficulty', 'Unknown')
+        skill = meta.get('skill')
+        category = meta.get('category')
         correct_answer = meta.get('correct_answer')
         is_correct = str(chosen).strip() == str(correct_answer).strip() if correct_answer is not None else False
 
-        skill_scores.setdefault(skill, {})
-        skill_scores[skill].setdefault(difficulty, [0, 0])
-        skill_scores[skill][difficulty][1] += 1  # total
+        skill_total[skill] = skill_total.get(skill, 0) + 1
+        category_total[category] = category_total.get(category, 0) + 1
         if is_correct:
-            skill_scores[skill][difficulty][0] += 1  # correct
+            skill_correct[skill] = skill_correct.get(skill, 0) + 1
+            category_correct[category] = category_correct.get(category, 0) + 1
+            overall_correct += 1
 
-    # Calculate percentages
-    skill_percentages = {}
-    for skill, diff_dict in skill_scores.items():
-        skill_percentages[skill] = {}
-        for diff, (correct, total) in diff_dict.items():
-            percent = (correct / total * 100) if total > 0 else 0
-            skill_percentages[skill][diff] = round(percent, 2)
+    # Calculate per-skill percentage
+    skill_scores = {sk: round((skill_correct.get(sk, 0) / skill_total[sk]) * 100, 2) if skill_total[sk] > 0 else 0 for sk in skill_total}
+    # Calculate per-category percentage
+    category_scores = {cat: round((category_correct.get(cat, 0) / category_total[cat]) * 100, 2) if category_total[cat] > 0 else 0 for cat in category_total}
+    # Calculate overall percentage
+    overall_score = round((overall_correct / overall_total) * 100, 2) if overall_total > 0 else 0
 
-    # Assign grades
-    skill_grades = assign_skill_grade(skill_percentages)
+    # Assign grades (optional, can use skill_scores or category_scores)
+    skill_grades = assign_skill_grade({sk: {"All": v} for sk, v in skill_scores.items()})
 
     # Store scores and grades in candidate_submissions
     submissions.update_one(
         {'student_regno': student_regno},
         {'$set': {
-            'skill_scores': skill_percentages,
+            'skill_scores': skill_scores,
+            'category_scores': category_scores,
+            'overall_score': overall_score,
             'skill_grades': skill_grades
         }},
         upsert=False
@@ -422,14 +448,15 @@ def score_candidate_submission(student_regno: str, submitted_answers: list, db):
 
 def assign_skill_grade(skill_percentages):
     """
-    Assigns grade ("A", "I", "B", "F") for each skill based on percentage rules.
+    Assigns grade ("A"=Advanced, "I"=Intermediate, "B"=Beginner, "F"=Fail) for each skill based on per-difficulty percentages.
     """
     skill_grades = {}
     for skill, levels in skill_percentages.items():
+        # levels should be a dict: {"Beginner": %, "Intermediate": %, "Advanced": %}
         beginner = levels.get("Beginner", 0)
         intermediate = levels.get("Intermediate", 0)
         advanced = levels.get("Advanced", 0)
-        if beginner >= 90:
+        if beginner >= 70:
             if intermediate >= 60:
                 if advanced >= 40:
                     skill_grades[skill] = "A"

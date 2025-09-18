@@ -111,7 +111,7 @@ async def delete_candidate_root(payload: dict = Body(...)):
 # In-memory HOD user store for demo (replace with DB in production)
 HOD_USERS = {}
 
-# Registration Page (GET) with per-field readonly support
+# Registration Page (GET) with per-field readonly support and duplicate prevention
 @app.get("/register/{username}", response_class=HTMLResponse)
 async def show_registration_form(request: Request, username: str = "", edit: str = "0"):
     # If username is provided, fetch candidate record and prefill all fields
@@ -120,6 +120,13 @@ async def show_registration_form(request: Request, username: str = "", edit: str
         from db.mongodb import get_db
         users_collection = get_db()
         candidate = users_collection.find_one({"username": username, "user_type": "candidate"})
+        # Prevent duplicate registration/skills submission
+        if candidate and candidate.get("skills"):
+            regno = candidate.get("regNo", "")
+            name = candidate.get("name", "Candidate")
+            # Redirect directly to candidate portal
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url=f"/candidate-portal?regno={regno}&name={name}", status_code=302)
     # Prepare context with per-field readonly flags
     def is_readonly(val):
         return bool(val)
