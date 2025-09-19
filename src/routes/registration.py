@@ -129,8 +129,8 @@ async def register_user(
         # Debug: print all form values received
     import inspect
     print("[DEBUG] Raw form values:")
-    for name, value in inspect.currentframe().f_locals.items():
-        print(f"    {name}: {value}")
+    for fieldname, value in inspect.currentframe().f_locals.items():
+        print(f"    {fieldname}: {value}")
     skills_list = json.loads(skills) if skills else []
     projects_list = json.loads(projects) if projects else []
 
@@ -163,8 +163,23 @@ async def register_user(
         candidate_id = existing.get("candidate_id")
         test_doc = test_collection.find_one({"student_regno": university_registration_number})
         if not test_doc:
-            skill_list_existing = existing.get("skills", {})
-            selected_categories_skills = {cat: skills for cat, skills in skill_list_existing.items() if skills}
+            skill_list_existing = existing.get("skills", [])
+            db = get_db_connection()
+            skills_collection = db["skills_list"]
+
+            # Build a mapping from skill to category
+            skill_to_category = {}
+            for doc in skills_collection.find():
+                category = doc.get("category")
+                for skill in doc.get("skills", []):
+                    skill_to_category[skill] = category
+
+            # Build selected_categories_skills as {category: [skills]}
+            selected_categories_skills = {}
+            for skill in skill_list_existing:
+                category = skill_to_category.get(skill)
+                if category:
+                    selected_categories_skills.setdefault(category, []).append(skill)
             selected = allocate_and_retrieve_questions(selected_categories_skills, total_questions=30)
             test_collection.insert_one({
                 "student_regno": university_registration_number,
@@ -376,8 +391,8 @@ async def take_test(regno: str, name: str = ""):
 
 def score_candidate_submission(student_regno: str, submitted_answers: list, db):
     """
-    Calculates skill-wise and difficulty-wise percentage of correct answers for a candidate's test submission.
-    Stores the result in candidate_submissions under 'skill_scores'.
+    Calculates skill-wise weighted percentage of correct answers for a candidate's test submission.
+    Stores the result in candidate_submissions under 'skill_scores' and assigns grades.
     """
     tests = db['candidate_tests']
     submissions = db['candidate_submissions']
@@ -396,15 +411,11 @@ def score_candidate_submission(student_regno: str, submitted_answers: list, db):
             'difficulty': q.get('difficulty')
         }
 
-    # 1. Per skill: skill_score% = correct answers / total questions for skill * 100
-    skill_correct = {}
-    skill_total = {}
-    # 2. Per category: category_score% = sum(correct answers of all skills in category) / total questions in category * 100
-    category_correct = {}
-    category_total = {}
-    # 3. Overall: overall_score% = sum(correct answers for all questions) / total_questions * 100
-    overall_correct = 0
-    overall_total = len(test_doc.get('questions', []))
+    # Define weights
+    difficulty_weights = {"Beginner": 1, "Intermediate": 1.5, "Advanced": 2}
+
+    skill_weighted_correct = {}
+    skill_weighted_total = {}
 
     for ans in submitted_answers:
         qid = str(ans.get('question_id'))
@@ -413,57 +424,50 @@ def score_candidate_submission(student_regno: str, submitted_answers: list, db):
         if not meta:
             continue
         skill = meta.get('skill')
-        category = meta.get('category')
+        difficulty = meta.get('difficulty', 'Beginner')
         correct_answer = meta.get('correct_answer')
         is_correct = str(chosen).strip() == str(correct_answer).strip() if correct_answer is not None else False
 
-        skill_total[skill] = skill_total.get(skill, 0) + 1
-        category_total[category] = category_total.get(category, 0) + 1
+        weight = difficulty_weights.get(difficulty, 1)
+        skill_weighted_total[skill] = skill_weighted_total.get(skill, 0) + weight
         if is_correct:
-            skill_correct[skill] = skill_correct.get(skill, 0) + 1
-            category_correct[category] = category_correct.get(category, 0) + 1
-            overall_correct += 1
+            skill_weighted_correct[skill] = skill_weighted_correct.get(skill, 0) + weight
 
-    # Calculate per-skill percentage
-    skill_scores = {sk: round((skill_correct.get(sk, 0) / skill_total[sk]) * 100, 2) if skill_total[sk] > 0 else 0 for sk in skill_total}
-    # Calculate per-category percentage
-    category_scores = {cat: round((category_correct.get(cat, 0) / category_total[cat]) * 100, 2) if category_total[cat] > 0 else 0 for cat in category_total}
-    # Calculate overall percentage
-    overall_score = round((overall_correct / overall_total) * 100, 2) if overall_total > 0 else 0
+    # Calculate weighted skill scores
+    skill_scores = {
+        (sk if sk is not None else "Unknown"): round((skill_weighted_correct.get(sk, 0) / skill_weighted_total[sk]) * 100, 2) if skill_weighted_total[sk] > 0 else 0
+        for sk in skill_weighted_total
+    }
 
-    # Assign grades (optional, can use skill_scores or category_scores)
-    skill_grades = assign_skill_grade({sk: {"All": v} for sk, v in skill_scores.items()})
+    # Assign grades based on weighted scores and your new thresholds
+    skill_grades = assign_skill_grade(skill_scores)
+
+    # Remove None keys if any (defensive, in case assign_skill_grade returns None keys)
+    skill_scores = {k if k is not None else "Unknown": v for k, v in skill_scores.items()}
+    skill_grades = {k if k is not None else "Unknown": v for k, v in skill_grades.items()}
 
     # Store scores and grades in candidate_submissions
     submissions.update_one(
         {'student_regno': student_regno},
         {'$set': {
             'skill_scores': skill_scores,
-            'category_scores': category_scores,
-            'overall_score': overall_score,
             'skill_grades': skill_grades
         }},
         upsert=False
     )
 
-def assign_skill_grade(skill_percentages):
+def assign_skill_grade(skill_scores):
     """
-    Assigns grade ("A"=Advanced, "I"=Intermediate, "B"=Beginner, "F"=Fail) for each skill based on per-difficulty percentages.
+    Assigns grade ("A"=Advanced, "I"=Intermediate, "B"=Beginner, "F"=Fail) for each skill based on weighted percentage.
     """
     skill_grades = {}
-    for skill, levels in skill_percentages.items():
-        # levels should be a dict: {"Beginner": %, "Intermediate": %, "Advanced": %}
-        beginner = levels.get("Beginner", 0)
-        intermediate = levels.get("Intermediate", 0)
-        advanced = levels.get("Advanced", 0)
-        if beginner >= 70:
-            if intermediate >= 60:
-                if advanced >= 40:
-                    skill_grades[skill] = "A"
-                else:
-                    skill_grades[skill] = "I"
-            else:
-                skill_grades[skill] = "B"
+    for skill, percent in skill_scores.items():
+        if percent < 45:
+            skill_grades[skill] = "F"  # Fail
+        elif percent < 60:
+            skill_grades[skill] = "B"  # Beginner
+        elif percent < 80:
+            skill_grades[skill] = "I"  # Intermediate
         else:
-            skill_grades[skill] = "F"
+            skill_grades[skill] = "A"  # Advanced
     return skill_grades

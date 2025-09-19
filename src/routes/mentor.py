@@ -278,9 +278,7 @@ async def import_poc_excel(file: UploadFile = File(...)):
                 "description": poc_data["description"],
                 "required_skills": poc_data["required_skills"],
                 "difficulties": poc_data["difficulties"],
-                # "requiredSkills": ", ".join(poc_data["skills"]) if poc_data["skills"] else "",
-                # "difficulty": ", ".join(poc_data["difficulties"]) if poc_data["difficulties"] else "B",
-                "matchedStudents": ", ".join(poc_data["students"]) if poc_data["students"] else ""
+                "matched_students": []
             }
 
             poc_data_list.append(poc_entry)
@@ -398,7 +396,7 @@ def update_poc_matched_students(student_regno: str, skill_grades: dict, poc_coll
     pocs = list(poc_collection.find({"type": "poc"}))
     print(f"Checking {len(pocs)} POCs for student {student_regno}...")
     for poc in pocs:
-        required_skills = poc.get("skills", [])
+        required_skills = poc.get("required_skills", [])
         required_difficulties = poc.get("difficulties", [])
         print(f"POC '{poc.get('title', poc.get('_id'))}': Required skills={required_skills}, Required difficulties={required_difficulties}")
         if not required_skills or not required_difficulties:
@@ -417,7 +415,7 @@ def update_poc_matched_students(student_regno: str, skill_grades: dict, poc_coll
         if match:
             students = poc.get("matched_students", [])
             if student_regno not in students:
-                students.append(student_regno)
+                students.append([student_regno])
                 poc_collection.update_one(
                     {"_id": poc["_id"]},
                     {"$set": {"matched_students": students}}

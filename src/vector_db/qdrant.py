@@ -152,16 +152,17 @@ def search_questions_by_skill_category_difficulty(skill: str, category: str, dif
         }
     )
     questions = [
-        {
-            "id": r.id,
-            "score": r.score,
-            "text": r.payload.get("text"),
-            "category": r.payload.get("category"),
-            "options": r.payload.get("options"),
-            "answer": r.payload.get("answer"),
-            "difficulty": r.payload.get("difficulty")
-        }
-        for r in results
+    {
+        "id": r.id,
+        "score": r.score,
+        "text": r.payload.get("text"),
+        "category": r.payload.get("category"),
+        "skill": r.payload.get("skill"),  # <-- Add this line
+        "options": r.payload.get("options"),
+        "answer": r.payload.get("answer"),
+        "difficulty": r.payload.get("difficulty")
+    }
+    for r in results
     ]
     print(f"[search_questions_by_skill_category_difficulty] Found {len(questions)} questions for skill '{skill}', category '{category}', difficulty '{difficulty}'")
     return questions
