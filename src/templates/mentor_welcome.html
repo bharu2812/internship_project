@@ -210,7 +210,7 @@
                             <th>POC Title</th>
                             <th>Description</th>
                             <th>Required Skills</th>
-                            <th>Difficulty Level</th>
+                            <th>Difficulties</th>
                             <th>Matched Students</th>
                         </tr>
                     </thead>
@@ -233,11 +233,11 @@
                 <label for="description">Description</label>
                 <textarea id="description" name="description" required></textarea>
                 
-                <label for="requiredSkills">Required Skills</label>
-                <input type="text" id="requiredSkills" name="requiredSkills" required placeholder="e.g., React, Node.js, MongoDB">
+                <label for="required_skills">Required Skills</label>
+                <input type="text" id="required_skills" name="required_skills" required placeholder="e.g., React, Node.js, MongoDB">
                 
-                <label for="difficulty">Difficulty Level</label>
-                <select id="difficulty" name="difficulty" required style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                <label for="difficulties">Difficulties</label>
+                <select id="difficulties" name="difficulties" required style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
                     <option value="">Select Difficulty</option>
                     <option value="Beginner">Beginner</option>
                     <option value="Intermediate">Intermediate</option>
@@ -247,8 +247,8 @@
                 <label for="mentorContact">Mentor Contact Number</label>
                 <input type="text" id="mentorContact" name="mentorContact" required pattern="[0-9]{10}" maxlength="10" placeholder="Enter 10-digit number">
 
-                <label for="matchedStudents">Matched Students</label>
-                <input type="text" id="matchedStudents" name="matchedStudents" placeholder="Student Registration Numbers or Names (comma separated)">
+                <label for="matched_students">Matched Students</label>
+                <input type="text" id="matched_students" name="matched_students" placeholder="Student Registration Numbers or Names (comma separated)">
                 
                 <div class="actions">
                     <button type="button" onclick="closeAddDialog()">Cancel</button>
@@ -263,7 +263,7 @@
 
     <script>
         // POC data (will be loaded from backend)
-        let pocData = [];
+    let pocData = [];
 
         // Initialize the table on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -303,20 +303,20 @@
             tableBody.innerHTML = '';
             
             pocData.forEach((poc, index) => {
-                addPOCRow(poc.title, poc.description, poc.requiredSkills, poc.difficulty, poc.matchedStudents, index);
+                addPOCRow(poc.title, poc.description, poc.required_skills, poc.difficulties, poc.matched_students, index);
             });
         }
 
-        function addPOCRow(title, description, requiredSkills, difficulty, matchedStudents, index) {
+        function addPOCRow(title, description, required_skills, difficulties, matched_students, index) {
             const tableBody = document.getElementById('pocTable').getElementsByTagName('tbody')[0];
             const row = tableBody.insertRow();
             
             row.innerHTML = `
                 <td>${title}</td>
                 <td>${description.length > 50 ? description.substring(0, 50) + '...' : description}</td>
-                <td>${requiredSkills}</td>
-                <td>${difficulty}</td>
-                <td>${matchedStudents || 'Not Assigned'}</td>
+                <td>${required_skills}</td>
+                <td>${difficulties}</td>
+                <td>${matched_students || 'Not Assigned'}</td>
             `;
         }
 
@@ -365,9 +365,9 @@
             const poc = pocData[index];
             document.getElementById('pocTitle').value = poc.title;
             document.getElementById('description').value = poc.description;
-            document.getElementById('requiredSkills').value = poc.requiredSkills;
-            document.getElementById('difficulty').value = poc.difficulty;
-            document.getElementById('matchedStudents').value = poc.matchedStudents || '';
+            document.getElementById('required_skills').value = poc.required_skills;
+            document.getElementById('difficulties').value = poc.difficulties;
+            document.getElementById('matched_students').value = poc.matched_students || '';
             
             // Store the index for updating
             document.getElementById('addForm').dataset.editIndex = index;
@@ -412,10 +412,10 @@
             const pocEntry = {
                 title: formData.get('pocTitle'),
                 description: formData.get('description'),
-                requiredSkills: formData.get('requiredSkills'),
-                difficulty: formData.get('difficulty'),
+                required_skills: formData.get('required_skills'),
+                difficulties: formData.get('difficulties'),
                 mentorContact: mentorContact,
-                matchedStudents: formData.get('matchedStudents')
+                matched_students: formData.get('matched_students')
             };
             try {
                 const editIndex = e.target.dataset.editIndex;
